@@ -54,6 +54,9 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 
 	// create a certificate pool, then add the root CA into it
 	myCAPath := os.Getenv("SSL_CERT_FILE")
+	if myCAPath == "" {
+		return confmap.Retrieved{}, fmt.Errorf("unable to fetch the Root CA for uri %q", uri)
+	}
 	pool, err := x509.SystemCertPool()
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("unable to create a cert pool")
