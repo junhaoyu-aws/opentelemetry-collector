@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFunctionalityDownloadFileHTTPS(t *testing.T) {
@@ -26,4 +27,38 @@ func TestFunctionalityDownloadFileHTTPS(t *testing.T) {
 	_, err := fp.Retrieve(context.Background(), "https://localhost:4444/validConfig", nil)
 	assert.NoError(t, err)
 	assert.NoError(t, fp.Shutdown(context.Background()))
+}
+
+func TestUnsupportedScheme(t *testing.T) {
+	fp := New()
+	_, err := fp.Retrieve(context.Background(), "s3://google.com", nil)
+	assert.Error(t, err)
+	assert.NoError(t, fp.Shutdown(context.Background()))
+}
+
+func TestEmptyURI(t *testing.T) {
+	fp := New()
+	_, err := fp.Retrieve(context.Background(), "", nil)
+	require.Error(t, err)
+	require.NoError(t, fp.Shutdown(context.Background()))
+}
+
+func TestNonExistent(t *testing.T) {
+	fp := New()
+	_, err := fp.Retrieve(context.Background(), "https://non-exist-domain/default-config.yaml", nil)
+	assert.Error(t, err)
+	require.NoError(t, fp.Shutdown(context.Background()))
+}
+
+func TestInvalidYAML(t *testing.T) {
+	fp := New()
+	_, err := fp.Retrieve(context.Background(), "https://localhost:4444/invalidConfig", nil)
+	require.Error(t, err)
+	require.NoError(t, fp.Shutdown(context.Background()))
+}
+
+func TestScheme(t *testing.T) {
+	fp := New()
+	assert.Equal(t, "https", fp.Scheme())
+	require.NoError(t, fp.Shutdown(context.Background()))
 }

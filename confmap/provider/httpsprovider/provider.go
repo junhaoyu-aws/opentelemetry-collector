@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 
 	"go.opentelemetry.io/collector/confmap"
@@ -29,7 +30,6 @@ import (
 
 const (
 	schemeName = "https"
-	myCaPath   = "/Users/yujunhao/certs/server.crt"
 )
 
 type provider struct{}
@@ -52,17 +52,18 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
-	// certificate pool
+	// create a certificate pool, then add the root CA into it
+	myCAPath := os.Getenv("SSL_CERT_FILE")
 	pool, err := x509.SystemCertPool()
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("unable to create a cert pool")
 	}
-	crt, err := ioutil.ReadFile(myCaPath)
+	crt, err := ioutil.ReadFile(myCAPath)
 	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to read CA from uri %q", myCaPath)
+		return confmap.Retrieved{}, fmt.Errorf("unable to read CA from uri %q", myCAPath)
 	}
 	if ok := pool.AppendCertsFromPEM(crt); !ok {
-		return confmap.Retrieved{}, fmt.Errorf("unable to add CA from uri %q into the cert pool", myCaPath)
+		return confmap.Retrieved{}, fmt.Errorf("unable to add CA from uri %q into the cert pool", myCAPath)
 	}
 
 	// https client
@@ -76,7 +77,7 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 	}
 
 	//GET
-	r, err := client.Get("https://localhost:4444/validConfig")
+	r, err := client.Get(uri)
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q", uri)
 	}
