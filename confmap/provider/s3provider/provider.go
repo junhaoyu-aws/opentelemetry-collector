@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	"go.opentelemetry.io/collector/confmap"
@@ -31,10 +32,8 @@ import (
 )
 
 const (
-	schemeName   = "s3"
-	stop         = "."
-	colonSlashes = "://"
-	s3URITail    = ".amazonaws.com/"
+	schemeName         = "s3"
+	expectedURIPattern = "s3://(.*)\\.s3\\.(.*).amazonaws\\.com/(.*)"
 )
 
 type provider struct{}
@@ -52,7 +51,7 @@ func New() confmap.Provider {
 	return &provider{}
 }
 
-func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.WatcherFunc) (confmap.Retrieved, error) {
 	if !strings.HasPrefix(uri, schemeName+":") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
@@ -70,18 +69,19 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 	}
 
 	// AWS SDK default config
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
 		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("AWS SDK's default configuration fail to load")
 	}
 
-	// s3 client / manager
+	// to create a s3 client and also a s3 downloader
+	// s3 downloader is especially for s3 downloading op
 	client := s3.NewFromConfig(cfg)
 	downloader := manager.NewDownloader(client)
 
 	// headObject : metadata, to check the length of the YAML bytes
-	headObject, err := client.HeadObject(context.TODO(), &s3.HeadObjectInput{
+	headObject, err := client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
@@ -93,7 +93,7 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 	w := manager.NewWriteAtBuffer(buf)
 
 	// download op
-	_, err = downloader.Download(context.TODO(), w, &s3.GetObjectInput{
+	_, err = downloader.Download(ctx, w, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
@@ -120,34 +120,25 @@ func (*provider) Shutdown(context.Context) error {
 //		-  [REGION] : Where are servers from, e.g. us-west-2.
 //		-  [KEY]    : The key exists in a given bucket, can be used to retrieve a file.
 func S3URISplit(uri string) (string, string, string, error) {
-	// split with '.'
-	// should be at least 5 splitted parts s3:[BUCKET], s3, [REGION], amazonaws, com/[KEY]
-	// check the length
-	splitted := strings.Split(uri, stop)
-	if len(splitted) < 5 {
+	matched, err := regexp.MatchString(expectedURIPattern, uri)
+	if err != nil || !matched {
 		return "", "", "", fmt.Errorf("invalid s3-uri")
 	}
+	splitted := strings.Split(uri, ".")
 	// [REGION] : easy to get
 	region := splitted[2]
 	// [BUCKET] : split s3:[BUCKET] using '://'
 	bucketString := splitted[0]
-	bucketSplitted := strings.Split(bucketString, colonSlashes)
-	if len(bucketSplitted) < 2 {
-		return "", "", "", fmt.Errorf("invalid s3-uri")
-	}
+	bucketSplitted := strings.Split(bucketString, "://")
 	bucket := bucketSplitted[1]
 	// [KEY] : split uri using '.amazonaws.com/'
 	keyString := uri
-	keySplitted := strings.Split(keyString, s3URITail)
-	if len(keySplitted) < 2 {
-		return "", "", "", fmt.Errorf("invalid s3-uri")
-	}
+	keySplitted := strings.Split(keyString, ".amazonaws.com/")
 	key := keySplitted[1]
 	// check if any of them is empty
 	if bucket == "" || region == "" || key == "" {
 		return "", "", "", fmt.Errorf("invalid s3-uri")
 	}
-	log.Println(bucket + " " + region + " " + key)
 	// return
 	return bucket, region, key, nil
 }
