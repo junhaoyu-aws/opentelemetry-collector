@@ -27,8 +27,7 @@ import (
 )
 
 const (
-	schemeName    = "http"
-	httpGetPrefix = "http://"
+	schemeName = "http"
 )
 
 type provider struct{}
