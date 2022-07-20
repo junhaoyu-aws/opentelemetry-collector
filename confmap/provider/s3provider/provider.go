@@ -32,8 +32,7 @@ import (
 )
 
 const (
-	schemeName         = "s3"
-	expectedURIPattern = "s3://(.*)\\.s3\\.(.*).amazonaws\\.com/(.*)"
+	schemeName = "s3"
 )
 
 type provider struct{}
@@ -76,7 +75,8 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 	}
 
 	// to create a s3 client and also a s3 downloader
-	// s3 downloader is especially for s3 downloading op
+	// s3 client provides interfaces for Bucket/File Management in Amazon S3
+	// s3 downloader is especially for s3 downloading operation
 	client := s3.NewFromConfig(cfg)
 	downloader := manager.NewDownloader(client)
 
@@ -120,7 +120,7 @@ func (*provider) Shutdown(context.Context) error {
 //		-  [REGION] : Where are servers from, e.g. us-west-2.
 //		-  [KEY]    : The key exists in a given bucket, can be used to retrieve a file.
 func S3URISplit(uri string) (string, string, string, error) {
-	matched, err := regexp.MatchString(expectedURIPattern, uri)
+	matched, err := regexp.MatchString("s3://(.*)\\.s3\\.(.*).amazonaws\\.com/(.*)", uri)
 	if err != nil || !matched {
 		return "", "", "", fmt.Errorf("invalid s3-uri")
 	}
