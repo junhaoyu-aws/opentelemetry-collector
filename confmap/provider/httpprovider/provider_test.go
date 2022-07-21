@@ -27,7 +27,7 @@ import (
 	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
-// testRetrieve: Mock how HTTP server works in normal cases
+// testRetrieve: Mock how Retrieve() works in normal cases
 type testRetrieve struct{}
 
 func NewTestRetrieve() confmap.Provider {
@@ -55,7 +55,7 @@ func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testInvalidRetrieve: Mock how HTTP server works when the returned config file is invalid
+// testInvalidRetrieve: Mock how Retrieve() works when the returned config file is invalid
 type testInvalidRetrieve struct{}
 
 func NewTestInvalidRetrieve() confmap.Provider {
@@ -79,7 +79,7 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExisitRetrieve: Mock how HTTP server works when there is no corresponding config file according to the given http-uri
+// testNonExisitRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given http-uri
 type testNonExisitRetrieve struct{}
 
 func NewTestNonExistRetrieve() confmap.Provider {
