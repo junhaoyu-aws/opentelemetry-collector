@@ -17,7 +17,8 @@ package s3provider
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
+	"regexp"
 	"strings"
 
 	"go.opentelemetry.io/collector/confmap"
@@ -30,10 +31,7 @@ import (
 )
 
 const (
-	schemeName   = "s3"
-	stop         = "."
-	colonSlashes = "://"
-	s3URITail    = ".amazonaws.com/"
+	schemeName = "s3"
 )
 
 type provider struct{}
@@ -51,48 +49,50 @@ func New() confmap.Provider {
 	return &provider{}
 }
 
-func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.WatcherFunc) (confmap.Retrieved, error) {
 	if !strings.HasPrefix(uri, schemeName+":") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
+	}
+
+	// Check if users set up their env for S3 Auth check yet
+	if os.Getenv("AWS_ACCESS_KEY_ID") == "" || os.Getenv("AWS_SECRET_ACCESS_KEY") == "" {
+		return confmap.Retrieved{}, fmt.Errorf("unable to fetch access keys for S3 Auth")
 	}
 
 	// Split the uri and get [BUCKET], [REGION], [KEY]
 	bucket, region, key, err := S3URISplit(uri)
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not valid s3-url", uri)
 	}
 
 	// AWS SDK default config
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("AWS SDK's default configuration fail to load")
 	}
 
-	// s3 client / manager
+	// to create a s3 client and also a s3 downloader
+	// s3 client provides interfaces for Bucket/File Management in Amazon S3
+	// s3 downloader is especially for s3 downloading operation
 	client := s3.NewFromConfig(cfg)
 	downloader := manager.NewDownloader(client)
-
 	// headObject : metadata, to check the length of the YAML bytes
-	headObject, err := client.HeadObject(context.TODO(), &s3.HeadObjectInput{
+	headObject, err := client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("HeadObject failed to fetch : Bucket %q, Key %q, Region %q", bucket, key, region)
 	}
 	buf := make([]byte, int(headObject.ContentLength))
 	w := manager.NewWriteAtBuffer(buf)
 
 	// download op
-	_, err = downloader.Download(context.TODO(), w, &s3.GetObjectInput{
+	_, err = downloader.Download(ctx, w, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
 	}
 
@@ -114,34 +114,25 @@ func (*provider) Shutdown(context.Context) error {
 //		-  [REGION] : Where are servers from, e.g. us-west-2.
 //		-  [KEY]    : The key exists in a given bucket, can be used to retrieve a file.
 func S3URISplit(uri string) (string, string, string, error) {
-	// split with '.'
-	// should be at least 5 splitted parts s3:[BUCKET], s3, [REGION], amazonaws, com/[KEY]
-	// check the length
-	splitted := strings.Split(uri, stop)
-	if len(splitted) < 5 {
+	matched, err := regexp.MatchString("s3://(.*)\\.s3\\.(.*).amazonaws\\.com/(.*)", uri)
+	if err != nil || !matched {
 		return "", "", "", fmt.Errorf("invalid s3-uri")
 	}
+	splitted := strings.Split(uri, ".")
 	// [REGION] : easy to get
 	region := splitted[2]
 	// [BUCKET] : split s3:[BUCKET] using '://'
 	bucketString := splitted[0]
-	bucketSplitted := strings.Split(bucketString, colonSlashes)
-	if len(bucketSplitted) < 2 {
-		return "", "", "", fmt.Errorf("invalid s3-uri")
-	}
+	bucketSplitted := strings.Split(bucketString, "://")
 	bucket := bucketSplitted[1]
 	// [KEY] : split uri using '.amazonaws.com/'
 	keyString := uri
-	keySplitted := strings.Split(keyString, s3URITail)
-	if len(keySplitted) < 2 {
-		return "", "", "", fmt.Errorf("invalid s3-uri")
-	}
+	keySplitted := strings.Split(keyString, ".amazonaws.com/")
 	key := keySplitted[1]
 	// check if any of them is empty
 	if bucket == "" || region == "" || key == "" {
 		return "", "", "", fmt.Errorf("invalid s3-uri")
 	}
-	log.Println(bucket + " " + region + " " + key)
 	// return
 	return bucket, region, key, nil
 }
