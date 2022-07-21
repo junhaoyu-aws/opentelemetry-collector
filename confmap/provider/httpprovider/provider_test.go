@@ -34,7 +34,7 @@ func NewTestRetrieve() confmap.Provider {
 	return &testRetrieve{}
 }
 
-func (tr *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
 	// check URI's prefix
 	if !strings.HasPrefix(uri, schemeName+"://") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
@@ -47,11 +47,11 @@ func (tr *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confma
 	return internal.NewRetrievedFromYAML(f)
 }
 
-func (tr *testRetrieve) Scheme() string {
+func (fp *testRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (tr *testRetrieve) Shutdown(context.Context) error {
+func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
@@ -62,7 +62,7 @@ func NewTestInvalidRetrieve() confmap.Provider {
 	return &testInvalidRetrieve{}
 }
 
-func (tir *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
 	// check URI's prefix
 	if !strings.HasPrefix(uri, schemeName+"://") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
@@ -71,11 +71,11 @@ func (tir *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watche
 	return internal.NewRetrievedFromYAML([]byte("wrong yaml:["))
 }
 
-func (tir *testInvalidRetrieve) Scheme() string {
+func (fp *testInvalidRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (tir *testInvalidRetrieve) Shutdown(context.Context) error {
+func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
@@ -86,7 +86,7 @@ func NewTestNonExistRetrieve() confmap.Provider {
 	return &testNonExisitRetrieve{}
 }
 
-func (tnr *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fp *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
 	// check URI's prefix
 	if !strings.HasPrefix(uri, schemeName+"://") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
@@ -99,17 +99,17 @@ func (tnr *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watc
 	return internal.NewRetrievedFromYAML(f)
 }
 
-func (tnr *testNonExisitRetrieve) Scheme() string {
+func (fp *testNonExisitRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (tnr *testNonExisitRetrieve) Shutdown(context.Context) error {
+func (fp *testNonExisitRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
 func TestFunctionalityDownloadFileHTTP(t *testing.T) {
 	fp := NewTestRetrieve()
-	_, err := fp.Retrieve(context.Background(), "http://localhost:3333/validConfig", nil)
+	_, err := fp.Retrieve(context.Background(), "http://...", nil)
 	assert.NoError(t, err)
 	assert.NoError(t, fp.Shutdown(context.Background()))
 }
@@ -130,14 +130,14 @@ func TestEmptyURI(t *testing.T) {
 
 func TestNonExistent(t *testing.T) {
 	fp := NewTestNonExistRetrieve()
-	_, err := fp.Retrieve(context.Background(), "http://non-exist-domain/default-config.yaml", nil)
+	_, err := fp.Retrieve(context.Background(), "http://non-exist-domain/...", nil)
 	assert.Error(t, err)
 	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestInvalidYAML(t *testing.T) {
 	fp := NewTestInvalidRetrieve()
-	_, err := fp.Retrieve(context.Background(), "http://localhost:3333/invalidConfig", nil)
+	_, err := fp.Retrieve(context.Background(), "http://.../invalidConfig", nil)
 	assert.Error(t, err)
 	require.NoError(t, fp.Shutdown(context.Background()))
 }
