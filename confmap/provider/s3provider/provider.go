@@ -17,7 +17,6 @@ package s3provider
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -63,14 +62,12 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 	// Split the uri and get [BUCKET], [REGION], [KEY]
 	bucket, region, key, err := S3URISplit(uri)
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not valid s3-url", uri)
 	}
 
 	// AWS SDK default config
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("AWS SDK's default configuration fail to load")
 	}
 
@@ -86,7 +83,6 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("HeadObject failed to fetch : Bucket %q, Key %q, Region %q", bucket, key, region)
 	}
 	buf := make([]byte, int(headObject.ContentLength))
@@ -98,7 +94,6 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
 	}
 
