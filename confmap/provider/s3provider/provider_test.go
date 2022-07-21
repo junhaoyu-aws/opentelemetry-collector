@@ -46,14 +46,14 @@ func checkURI(uri string) error {
 	return nil
 }
 
-// testRetrieve: Mock how Amazon S3 works in normal cases
+// testRetrieve: Mock how Retrieve() works in normal cases
 type testRetrieve struct{}
 
 func NewTestRetrieve() confmap.Provider {
 	return &testRetrieve{}
 }
 
-func (tr *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
 	// check URI
 	err := checkURI(uri)
 	if err != nil {
@@ -67,22 +67,22 @@ func (tr *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confma
 	return internal.NewRetrievedFromYAML(f)
 }
 
-func (tr *testRetrieve) Scheme() string {
+func (fp *testRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (tr *testRetrieve) Shutdown(context.Context) error {
+func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testInvalidRetrieve: Mock how Amazon S3 works when the returned config file is invalid
+// testInvalidRetrieve: Mock how Retrieve() works when the returned config file is invalid
 type testInvalidRetrieve struct{}
 
 func NewTestInvalidRetrieve() confmap.Provider {
 	return &testInvalidRetrieve{}
 }
 
-func (tir *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
 	// check URI
 	err := checkURI(uri)
 	if err != nil {
@@ -92,22 +92,22 @@ func (tir *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watche
 	return internal.NewRetrievedFromYAML([]byte("wrong yaml:["))
 }
 
-func (tir *testInvalidRetrieve) Scheme() string {
+func (fp *testInvalidRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (tir *testInvalidRetrieve) Shutdown(context.Context) error {
+func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExisitRetrieve: Mock how Amazon S3 works when there is no corresponding config file according to the given s3-uri
+// testNonExisitRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given s3-uri
 type testNonExisitRetrieve struct{}
 
 func NewTestNonExistRetrieve() confmap.Provider {
 	return &testNonExisitRetrieve{}
 }
 
-func (tnr *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fp *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
 	// check URI
 	err := checkURI(uri)
 	if err != nil {
@@ -121,81 +121,81 @@ func (tnr *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watc
 	return internal.NewRetrievedFromYAML(f)
 }
 
-func (tnr *testNonExisitRetrieve) Scheme() string {
+func (fp *testNonExisitRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (tnr *testNonExisitRetrieve) Shutdown(context.Context) error {
+func (fp *testNonExisitRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
 func TestFunctionalityDownloadFileS3(t *testing.T) {
-	tr := NewTestRetrieve()
-	_, err := tr.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/key", nil)
+	fp := NewTestRetrieve()
+	_, err := fp.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/key", nil)
 	assert.NoError(t, err)
-	assert.NoError(t, tr.Shutdown(context.Background()))
+	assert.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestFunctionalityS3URISplit(t *testing.T) {
-	tr := NewTestRetrieve()
+	fp := NewTestRetrieve()
 	bucket, region, key, err := S3URISplit("s3://bucket.s3.region.amazonaws.com/key")
 	assert.NoError(t, err)
 	assert.Equal(t, "bucket", bucket)
 	assert.Equal(t, "region", region)
 	assert.Equal(t, "key", key)
-	assert.NoError(t, tr.Shutdown(context.Background()))
+	assert.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestInvalidS3URISplit(t *testing.T) {
-	tr := NewTestRetrieve()
-	_, err := tr.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws", nil)
+	fp := NewTestRetrieve()
+	_, err := fp.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws", nil)
 	assert.Error(t, err)
-	_, err = tr.Retrieve(context.Background(), "s3://bucket.s3.region.aws.com/key", nil)
+	_, err = fp.Retrieve(context.Background(), "s3://bucket.s3.region.aws.com/key", nil)
 	assert.Error(t, err)
-	require.NoError(t, tr.Shutdown(context.Background()))
+	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestUnsupportedScheme(t *testing.T) {
-	tr := NewTestRetrieve()
-	_, err := tr.Retrieve(context.Background(), "https://google.com", nil)
+	fp := NewTestRetrieve()
+	_, err := fp.Retrieve(context.Background(), "https://google.com", nil)
 	assert.Error(t, err)
-	assert.NoError(t, tr.Shutdown(context.Background()))
+	assert.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestEmptyBucket(t *testing.T) {
-	tr := NewTestRetrieve()
-	_, err := tr.Retrieve(context.Background(), "s3://.s3.region.amazonaws.com/key", nil)
+	fp := NewTestRetrieve()
+	_, err := fp.Retrieve(context.Background(), "s3://.s3.region.amazonaws.com/key", nil)
 	require.Error(t, err)
-	require.NoError(t, tr.Shutdown(context.Background()))
+	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestEmptyKey(t *testing.T) {
-	tr := NewTestRetrieve()
-	_, err := tr.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/", nil)
+	fp := NewTestRetrieve()
+	_, err := fp.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/", nil)
 	require.Error(t, err)
-	require.NoError(t, tr.Shutdown(context.Background()))
+	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestNonExistent(t *testing.T) {
-	tnr := NewTestNonExistRetrieve()
-	_, err := tnr.Retrieve(context.Background(), "s3://non-exist-bucket.s3.region.amazonaws.com/key", nil)
+	fp := NewTestNonExistRetrieve()
+	_, err := fp.Retrieve(context.Background(), "s3://non-exist-bucket.s3.region.amazonaws.com/key", nil)
 	assert.Error(t, err)
-	_, err = tnr.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/non-exist-key.yaml", nil)
+	_, err = fp.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/non-exist-key.yaml", nil)
 	assert.Error(t, err)
-	_, err = tnr.Retrieve(context.Background(), "s3://bucket.s3.non-exist-region.amazonaws.com/key", nil)
+	_, err = fp.Retrieve(context.Background(), "s3://bucket.s3.non-exist-region.amazonaws.com/key", nil)
 	assert.Error(t, err)
-	require.NoError(t, tnr.Shutdown(context.Background()))
+	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestInvalidYAML(t *testing.T) {
-	tir := NewTestInvalidRetrieve()
-	_, err := tir.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/key", nil)
+	fp := NewTestInvalidRetrieve()
+	_, err := fp.Retrieve(context.Background(), "s3://bucket.s3.region.amazonaws.com/key", nil)
 	assert.Error(t, err)
-	require.NoError(t, tir.Shutdown(context.Background()))
+	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestScheme(t *testing.T) {
-	tr := NewTestRetrieve()
-	assert.Equal(t, "s3", tr.Scheme())
-	require.NoError(t, tr.Shutdown(context.Background()))
+	fp := NewTestRetrieve()
+	assert.Equal(t, "s3", fp.Scheme())
+	require.NoError(t, fp.Shutdown(context.Background()))
 }
