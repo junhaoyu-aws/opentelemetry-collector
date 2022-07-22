@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 
 	"go.opentelemetry.io/collector/confmap"
@@ -29,7 +30,6 @@ import (
 
 const (
 	schemeName = "https"
-	myCaPath   = "/Users/yujunhao/certs/server.crt"
 )
 
 type provider struct{}
@@ -52,6 +52,11 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
+	// check if users set up their RootCAs yet
+	myCaPath := os.Getenv("SSL_CERT_FILE")
+	if myCaPath == "" {
+		return confmap.Retrieved{}, fmt.Errorf("unable to fetch RootCA")
+	}
 	// certificate pool
 	pool, err := x509.SystemCertPool()
 	if err != nil {
