@@ -16,49 +16,134 @@ package httpsprovider
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
+// testRetrieve: Mock how Retrieve() works in normal cases
+type testRetrieve struct{}
+
+func NewTestRetrieve() confmap.Provider {
+	return &testRetrieve{}
+}
+
+func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+	// check URI's prefix
+	if !strings.HasPrefix(uri, schemeName+"://") {
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
+	}
+	// read local config file and return
+	f, err := ioutil.ReadFile("../../testdata/config.yaml")
+	if err != nil {
+		return confmap.Retrieved{}, err
+	}
+	return internal.NewRetrievedFromYAML(f)
+}
+
+func (fp *testRetrieve) Scheme() string {
+	return schemeName
+}
+
+func (fp *testRetrieve) Shutdown(context.Context) error {
+	return nil
+}
+
+// testInvalidRetrieve: Mock how Retrieve() works when the returned config file is invalid
+type testInvalidRetrieve struct{}
+
+func NewTestInvalidRetrieve() confmap.Provider {
+	return &testInvalidRetrieve{}
+}
+
+func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+	// check URI's prefix
+	if !strings.HasPrefix(uri, schemeName+"://") {
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
+	}
+	// invalid config file and return
+	return internal.NewRetrievedFromYAML([]byte("wrong yaml:["))
+}
+
+func (fp *testInvalidRetrieve) Scheme() string {
+	return schemeName
+}
+
+func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
+	return nil
+}
+
+// testNonExisitRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given https-uri
+type testNonExisitRetrieve struct{}
+
+func NewTestNonExistRetrieve() confmap.Provider {
+	return &testNonExisitRetrieve{}
+}
+
+func (fp *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+	// check URI's prefix
+	if !strings.HasPrefix(uri, schemeName+"://") {
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
+	}
+	// read local config file and return
+	f, err := ioutil.ReadFile("../../testdata/non-exist-config.yaml")
+	if err != nil {
+		return confmap.Retrieved{}, err
+	}
+	return internal.NewRetrievedFromYAML(f)
+}
+
+func (fp *testNonExisitRetrieve) Scheme() string {
+	return schemeName
+}
+
+func (fp *testNonExisitRetrieve) Shutdown(context.Context) error {
+	return nil
+}
+
 func TestFunctionalityDownloadFileHTTPS(t *testing.T) {
-	fp := New()
-	_, err := fp.Retrieve(context.Background(), "https://localhost:4444/validConfig", nil)
+	fp := NewTestRetrieve()
+	_, err := fp.Retrieve(context.Background(), "https://...", nil)
 	assert.NoError(t, err)
 	assert.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestUnsupportedScheme(t *testing.T) {
-	fp := New()
-	_, err := fp.Retrieve(context.Background(), "s3://google.com", nil)
+	fp := NewTestRetrieve()
+	_, err := fp.Retrieve(context.Background(), "s3://...", nil)
 	assert.Error(t, err)
 	assert.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestEmptyURI(t *testing.T) {
-	fp := New()
+	fp := NewTestRetrieve()
 	_, err := fp.Retrieve(context.Background(), "", nil)
 	require.Error(t, err)
 	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestNonExistent(t *testing.T) {
-	fp := New()
+	fp := NewTestNonExistRetrieve()
 	_, err := fp.Retrieve(context.Background(), "https://non-exist-domain/default-config.yaml", nil)
 	assert.Error(t, err)
 	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestInvalidYAML(t *testing.T) {
-	fp := New()
-	_, err := fp.Retrieve(context.Background(), "https://localhost:4444/invalidConfig", nil)
+	fp := NewTestInvalidRetrieve()
+	_, err := fp.Retrieve(context.Background(), "https://.../invalidConfig", nil)
 	require.Error(t, err)
 	require.NoError(t, fp.Shutdown(context.Background()))
 }
 
 func TestScheme(t *testing.T) {
-	fp := New()
+	fp := NewTestRetrieve()
 	assert.Equal(t, "https", fp.Scheme())
 	require.NoError(t, fp.Shutdown(context.Background()))
 }
