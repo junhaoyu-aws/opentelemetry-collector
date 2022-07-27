@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"regexp"
 	"strings"
 
@@ -53,11 +52,6 @@ func New() confmap.Provider {
 func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.WatcherFunc) (confmap.Retrieved, error) {
 	if !strings.HasPrefix(uri, schemeName+":") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
-	}
-
-	// Check if users set up their env for S3 Auth check yet
-	if os.Getenv("AWS_ACCESS_KEY_ID") == "" || os.Getenv("AWS_SECRET_ACCESS_KEY") == "" {
-		return confmap.Retrieved{}, fmt.Errorf("unable to fetch access keys for S3 Auth")
 	}
 
 	// Split the uri and get [BUCKET], [REGION], [KEY]
