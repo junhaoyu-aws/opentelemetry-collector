@@ -17,6 +17,8 @@ package s3provider
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -26,7 +28,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -75,21 +76,7 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 	// s3 client provides interfaces for Bucket/File Management in Amazon S3
 	// s3 downloader is especially for s3 downloading operation
 	client := s3.NewFromConfig(cfg)
-	downloader := manager.NewDownloader(client)
-
-	// headObject : metadata, to check the length of the YAML bytes
-	headObject, err := client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("HeadObject failed to fetch : Bucket %q, Key %q, Region %q", bucket, key, region)
-	}
-	buf := make([]byte, int(headObject.ContentLength))
-	w := manager.NewWriteAtBuffer(buf)
-
-	// download op
-	_, err = downloader.Download(ctx, w, &s3.GetObjectInput{
+	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
@@ -97,7 +84,16 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
 	}
 
-	return internal.NewRetrievedFromYAML(w.Bytes())
+	// create a buffer and read content from the response body
+	buffer := make([]byte, int(resp.ContentLength))
+	defer resp.Body.Close()
+	_, err = resp.Body.Read(buffer)
+	if err != io.EOF && err != nil {
+		log.Println(err)
+		return confmap.Retrieved{}, fmt.Errorf("failed to read content from the downloaded config file via uri %q", uri)
+	}
+
+	return internal.NewRetrievedFromYAML(buffer)
 }
 
 func (*provider) Scheme() string {
