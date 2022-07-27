@@ -107,7 +107,7 @@ func (*provider) Shutdown(context.Context) error {
 //		-  [REGION] : Where are servers from, e.g. us-west-2.
 //		-  [KEY]    : The key exists in a given bucket, can be used to retrieve a file.
 func s3URISplit(uri string) (string, string, string, error) {
-	matched, err := regexp.MatchString("s3://(.*)\\.s3\\.(.*).amazonaws\\.com/(.*)", uri)
+	matched, err := regexp.MatchString(`s3:\/\/(.*)\.s3\.(.*).amazonaws\.com\/(.*)`, uri)
 	if err != nil || !matched {
 		return "", "", "", fmt.Errorf("invalid s3-uri")
 	}
