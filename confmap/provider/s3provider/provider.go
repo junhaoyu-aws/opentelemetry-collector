@@ -55,13 +55,13 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 	}
 
 	// Split the uri and get [BUCKET], [REGION], [KEY]
-	bucket, region, key, err := S3URISplit(uri)
+	bucket, region, key, err := s3URISplit(uri)
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not valid s3-url", uri)
 	}
 
 	// AWS SDK default config
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("AWS SDK's default configuration fail to load")
 	}
@@ -73,6 +73,8 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
+	}, func(o *s3.Options) {
+		o.Region = region
 	})
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
@@ -104,7 +106,7 @@ func (*provider) Shutdown(context.Context) error {
 //		-  [BUCKET] : The name of a bucket in Amazon S3.
 //		-  [REGION] : Where are servers from, e.g. us-west-2.
 //		-  [KEY]    : The key exists in a given bucket, can be used to retrieve a file.
-func S3URISplit(uri string) (string, string, string, error) {
+func s3URISplit(uri string) (string, string, string, error) {
 	matched, err := regexp.MatchString("s3://(.*)\\.s3\\.(.*).amazonaws\\.com/(.*)", uri)
 	if err != nil || !matched {
 		return "", "", "", fmt.Errorf("invalid s3-uri")

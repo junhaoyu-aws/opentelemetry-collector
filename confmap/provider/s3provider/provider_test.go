@@ -39,7 +39,7 @@ func checkURI(uri string) error {
 		return fmt.Errorf("unable to fetch access keys for S3 Auth")
 	}
 	// check uri valid or not, should with 'Bucket, Region, Key'
-	_, _, _, err := S3URISplit(uri)
+	_, _, _, err := s3URISplit(uri)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func TestFunctionalityDownloadFileS3(t *testing.T) {
 
 func TestFunctionalityS3URISplit(t *testing.T) {
 	fp := NewTestRetrieve()
-	bucket, region, key, err := S3URISplit("s3://bucket.s3.region.amazonaws.com/key")
+	bucket, region, key, err := s3URISplit("s3://bucket.s3.region.amazonaws.com/key")
 	assert.NoError(t, err)
 	assert.Equal(t, "bucket", bucket)
 	assert.Equal(t, "region", region)
