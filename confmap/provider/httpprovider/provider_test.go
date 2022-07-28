@@ -135,7 +135,7 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExistClient and testNonExistRetrieve: Mock how Retrieve() and HTTP client works when there is no corresponding config file according to the given s3-uri
+// testNonExistClient and testNonExistRetrieve: Mock how Retrieve() and HTTP client works when there is no corresponding config file according to the given http-uri
 type testNonExistClient struct {
 	Get func(uri string) (resp *http.Response, err error)
 }
