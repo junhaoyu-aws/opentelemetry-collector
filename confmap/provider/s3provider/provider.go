@@ -20,6 +20,7 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"go.opentelemetry.io/collector/confmap"
@@ -83,7 +84,6 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 	defer resp.Body.Close()
 	_, err = resp.Body.Read(buffer)
 	if err != io.EOF && err != nil {
-		log.Println(err)
 		return confmap.Retrieved{}, fmt.Errorf("failed to read content from the downloaded config file via uri %q", uri)
 	}
 
@@ -105,10 +105,15 @@ func (*provider) Shutdown(context.Context) error {
 //		-  [REGION] : Where are servers from, e.g. us-west-2.
 //		-  [KEY]    : The key exists in a given bucket, can be used to retrieve a file.
 func s3URISplit(uri string) (string, string, string, error) {
+	// check whether the pattern of s3-uri is correct
+	matched, err := regexp.MatchString(`s3:\/\/(.*)\.s3\.(.*).amazonaws\.com\/(.*)`, uri)
+	if !matched || err != nil {
+		return "", "", "", fmt.Errorf("invalid s3-uri using a wrong pattern")
+	}
 	// parse the uri as [scheme:][//[userinfo@]host][/]path[?query][#fragment], then extract components from
 	u, err := url.Parse(uri)
 	if err != nil {
-		return "", "", "", fmt.Errorf("invalid s3-uri")
+		return "", "", "", fmt.Errorf("failed to change the s3-uri to url.URL")
 	}
 	// extract components
 	key := strings.TrimPrefix(u.Path, "/")
@@ -119,6 +124,9 @@ func s3URISplit(uri string) (string, string, string, error) {
 	}
 	bucket := hostSplitted[0]
 	region := hostSplitted[2]
-
+	// check empty fields
+	if bucket == "" || region == "" || key == "" {
+		return "", "", "", fmt.Errorf("invalid s3-uri with empty fields")
+	}
 	return bucket, region, key, nil
 }

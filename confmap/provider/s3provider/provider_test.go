@@ -15,56 +15,76 @@
 package s3provider
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
-	"os"
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
-// checkURI checks whether the s3-uri is valid
-func checkURI(uri string) error {
-	// check uri's prefix valid or not
-	if !strings.HasPrefix(uri, schemeName+":") {
-		return fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
-	}
-	// Check if users set up their env for S3 Auth check yet
-	if os.Getenv("AWS_ACCESS_KEY_ID") == "" || os.Getenv("AWS_SECRET_ACCESS_KEY") == "" {
-		return fmt.Errorf("unable to fetch access keys for S3 Auth")
-	}
-	// check uri valid or not, should with 'Bucket, Region, Key'
-	_, _, _, err := s3URISplit(uri)
-	if err != nil {
-		return err
-	}
-	return nil
+// testRetrieve and testClient: Mock how Retrieve() and S3 client works in normal cases
+type testClient struct {
+	GetObject func(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 }
 
-// testRetrieve: Mock how Retrieve() works in normal cases
-type testRetrieve struct{}
+func NewTestClient() *testClient {
+	return &testClient{
+		GetObject: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+			// read local config file and return
+			f, err := ioutil.ReadFile("../../testdata/config.yaml")
+			if err != nil {
+				return &s3.GetObjectOutput{}, err
+			}
+			return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(f)), ContentLength: (int64)(len(f))}, nil
+		}}
+}
+
+type testRetrieve struct {
+	client *testClient
+}
 
 func NewTestRetrieve() confmap.Provider {
-	return &testRetrieve{}
+	return &testRetrieve{client: NewTestClient()}
 }
 
 func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	// check URI
-	err := checkURI(uri)
-	if err != nil {
-		return confmap.Retrieved{}, err
+	if !strings.HasPrefix(uri, schemeName+":") {
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
-	// read local config file and return
-	f, err := ioutil.ReadFile("../../testdata/config.yaml")
+	// Split the uri and get [BUCKET], [REGION], [KEY]
+	bucket, region, key, err := s3URISplit(uri)
 	if err != nil {
-		return confmap.Retrieved{}, err
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not valid s3-url", uri)
 	}
-	return internal.NewRetrievedFromYAML(f)
+	// read config file from mocked s3 and return
+	resp, err := fp.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}, func(o *s3.Options) {
+		o.Region = region
+	})
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
+	}
+
+	// create a buffer and read content from the response body
+	buffer := make([]byte, int(resp.ContentLength))
+	defer resp.Body.Close()
+	_, err = resp.Body.Read(buffer)
+	if err != io.EOF && err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("failed to read content from the downloaded config file via uri %q", uri)
+	}
+
+	return internal.NewRetrievedFromYAML(buffer)
 }
 
 func (fp *testRetrieve) Scheme() string {
@@ -75,21 +95,57 @@ func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testInvalidRetrieve: Mock how Retrieve() works when the returned config file is invalid
-type testInvalidRetrieve struct{}
+// testInvalidClient and testInvalidRetrieve: Mock how Retrieve() and S3 client works when the returned config file is invalid
+type testInvalidClient struct {
+	GetObject func(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+}
+
+func NewTestInvalidClient() *testInvalidClient {
+	return &testInvalidClient{
+		GetObject: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+			// read local config file and return
+			f := []byte("wrong yaml:[")
+			return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(f)), ContentLength: (int64)(len(f))}, nil
+		}}
+}
+
+type testInvalidRetrieve struct {
+	client *testInvalidClient
+}
 
 func NewTestInvalidRetrieve() confmap.Provider {
-	return &testInvalidRetrieve{}
+	return &testInvalidRetrieve{client: NewTestInvalidClient()}
 }
 
 func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	// check URI
-	err := checkURI(uri)
-	if err != nil {
-		return confmap.Retrieved{}, err
+	if !strings.HasPrefix(uri, schemeName+":") {
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
-	// invalid config file and return
-	return internal.NewRetrievedFromYAML([]byte("wrong yaml:["))
+	// Split the uri and get [BUCKET], [REGION], [KEY]
+	bucket, region, key, err := s3URISplit(uri)
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not valid s3-url", uri)
+	}
+	// read config file from mocked s3 and return
+	resp, err := fp.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}, func(o *s3.Options) {
+		o.Region = region
+	})
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
+	}
+
+	// create a buffer and read content from the response body
+	buffer := make([]byte, int(resp.ContentLength))
+	defer resp.Body.Close()
+	_, err = resp.Body.Read(buffer)
+	if err != io.EOF && err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("failed to read content from the downloaded config file via uri %q", uri)
+	}
+
+	return internal.NewRetrievedFromYAML(buffer)
 }
 
 func (fp *testInvalidRetrieve) Scheme() string {
@@ -100,32 +156,67 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExisitRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given s3-uri
-type testNonExisitRetrieve struct{}
+// testNonExistClient and testNonExistRetrieve: Mock how Retrieve() and s3 client works when there is no corresponding config file according to the given s3-uri
+type testNonExistClient struct {
+	GetObject func(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+}
+
+func NewTestNonExistClient() *testNonExistClient {
+	return &testNonExistClient{
+		GetObject: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+			// read local config file and return
+			f, err := ioutil.ReadFile("../../testdata/nonexist-config.yaml")
+			if err != nil {
+				return &s3.GetObjectOutput{}, err
+			}
+			return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(f)), ContentLength: (int64)(len(f))}, nil
+		}}
+}
+
+type testNonExistRetrieve struct {
+	client *testNonExistClient
+}
 
 func NewTestNonExistRetrieve() confmap.Provider {
-	return &testNonExisitRetrieve{}
+	return &testNonExistRetrieve{client: NewTestNonExistClient()}
 }
 
-func (fp *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	// check URI
-	err := checkURI(uri)
-	if err != nil {
-		return confmap.Retrieved{}, err
+func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
+	if !strings.HasPrefix(uri, schemeName+":") {
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
-	// read local config file and return
-	f, err := ioutil.ReadFile("../../testdata/non-exist-config.yaml")
+	// Split the uri and get [BUCKET], [REGION], [KEY]
+	bucket, region, key, err := s3URISplit(uri)
 	if err != nil {
-		return confmap.Retrieved{}, err
+		return confmap.Retrieved{}, fmt.Errorf("%q uri is not valid s3-url", uri)
 	}
-	return internal.NewRetrievedFromYAML(f)
+	// read config file from mocked s3 and return
+	resp, err := fp.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}, func(o *s3.Options) {
+		o.Region = region
+	})
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
+	}
+
+	// create a buffer and read content from the response body
+	buffer := make([]byte, int(resp.ContentLength))
+	defer resp.Body.Close()
+	_, err = resp.Body.Read(buffer)
+	if err != io.EOF && err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("failed to read content from the downloaded config file via uri %q", uri)
+	}
+
+	return internal.NewRetrievedFromYAML(buffer)
 }
 
-func (fp *testNonExisitRetrieve) Scheme() string {
+func (fp *testNonExistRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (fp *testNonExisitRetrieve) Shutdown(context.Context) error {
+func (fp *testNonExistRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
