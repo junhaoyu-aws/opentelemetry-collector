@@ -15,9 +15,12 @@
 package httpprovider
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -27,24 +30,50 @@ import (
 	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
-// testRetrieve: Mock how Retrieve() works in normal cases
-type testRetrieve struct{}
+// testRetrieve and testClient: Mock how Retrieve() and HTTP client works in normal cases
+type testClient struct {
+	Get func(uri string) (resp *http.Response, err error)
+}
+
+func NewTestClient() *testClient {
+	return &testClient{
+		Get: func(uri string) (resp *http.Response, err error) {
+			// read local config file and return
+			f, err := ioutil.ReadFile("../../testdata/config.yaml")
+			if err != nil {
+				return &http.Response{}, err
+			}
+			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
+		}}
+}
+
+type testRetrieve struct {
+	httpClient *testClient
+}
 
 func NewTestRetrieve() confmap.Provider {
-	return &testRetrieve{}
+	return &testRetrieve{httpClient: NewTestClient()}
 }
 
 func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	// check URI's prefix
 	if !strings.HasPrefix(uri, schemeName+"://") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
-	// read local config file and return
-	f, err := ioutil.ReadFile("../../testdata/config.yaml")
+
+	// send a HTTP GET request
+	resp, err := fp.httpClient.Get(uri)
 	if err != nil {
-		return confmap.Retrieved{}, err
+		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
 	}
-	return internal.NewRetrievedFromYAML(f)
+	defer resp.Body.Close()
+
+	// read the response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
+	}
+
+	return internal.NewRetrievedFromYAML(body)
 }
 
 func (fp *testRetrieve) Scheme() string {
@@ -55,20 +84,47 @@ func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testInvalidRetrieve: Mock how Retrieve() works when the returned config file is invalid
-type testInvalidRetrieve struct{}
+// testInvalidClient and testInvalidRetrieve: Mock how Retrieve() and HTTP client works when the returned config file is invalid
+type testInvalidClient struct {
+	Get func(uri string) (resp *http.Response, err error)
+}
+
+func NewTestInvalidClient() *testInvalidClient {
+	return &testInvalidClient{
+		Get: func(uri string) (resp *http.Response, err error) {
+			// read local config file and return
+			f := []byte("wrong yaml:[")
+			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
+		}}
+}
+
+type testInvalidRetrieve struct {
+	httpClient *testInvalidClient
+}
 
 func NewTestInvalidRetrieve() confmap.Provider {
-	return &testInvalidRetrieve{}
+	return &testInvalidRetrieve{httpClient: NewTestInvalidClient()}
 }
 
 func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	// check URI's prefix
 	if !strings.HasPrefix(uri, schemeName+"://") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
-	// invalid config file and return
-	return internal.NewRetrievedFromYAML([]byte("wrong yaml:["))
+
+	// send a HTTP GET request
+	resp, err := fp.httpClient.Get(uri)
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
+	}
+	defer resp.Body.Close()
+
+	// read the response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
+	}
+
+	return internal.NewRetrievedFromYAML(body)
 }
 
 func (fp *testInvalidRetrieve) Scheme() string {
@@ -79,31 +135,57 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExisitRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given http-uri
-type testNonExisitRetrieve struct{}
-
-func NewTestNonExistRetrieve() confmap.Provider {
-	return &testNonExisitRetrieve{}
+// testNonExistClient and testNonExistRetrieve: Mock how Retrieve() and HTTP client works when there is no corresponding config file according to the given s3-uri
+type testNonExistClient struct {
+	Get func(uri string) (resp *http.Response, err error)
 }
 
-func (fp *testNonExisitRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	// check URI's prefix
+func NewTestNonExistClient() *testNonExistClient {
+	return &testNonExistClient{
+		Get: func(uri string) (resp *http.Response, err error) {
+			// read local config file and return
+			f, err := ioutil.ReadFile("../../testdata/nonexist-config.yaml")
+			if err != nil {
+				return &http.Response{}, err
+			}
+			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
+		}}
+}
+
+type testNonExistRetrieve struct {
+	httpClient *testNonExistClient
+}
+
+func NewTestNonExistRetrieve() confmap.Provider {
+	return &testNonExistRetrieve{httpClient: NewTestNonExistClient()}
+}
+
+func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
 	if !strings.HasPrefix(uri, schemeName+"://") {
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
-	// read local config file and return
-	f, err := ioutil.ReadFile("../../testdata/non-exist-config.yaml")
+
+	// send a HTTP GET request
+	resp, err := fp.httpClient.Get(uri)
 	if err != nil {
-		return confmap.Retrieved{}, err
+		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
 	}
-	return internal.NewRetrievedFromYAML(f)
+	defer resp.Body.Close()
+
+	// read the response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
+	}
+
+	return internal.NewRetrievedFromYAML(body)
 }
 
-func (fp *testNonExisitRetrieve) Scheme() string {
+func (fp *testNonExistRetrieve) Scheme() string {
 	return schemeName
 }
 
-func (fp *testNonExisitRetrieve) Shutdown(context.Context) error {
+func (fp *testNonExistRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
