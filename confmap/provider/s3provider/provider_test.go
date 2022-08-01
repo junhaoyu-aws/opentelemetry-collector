@@ -41,7 +41,7 @@ func NewTestClient() *testClient {
 	return &testClient{
 		GetObject: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 			// read local config file and return
-			f, err := ioutil.ReadFile("../../testdata/config.yaml")
+			f, err := ioutil.ReadFile("./testdata/otel-config.yaml")
 			if err != nil {
 				return &s3.GetObjectOutput{}, err
 			}
