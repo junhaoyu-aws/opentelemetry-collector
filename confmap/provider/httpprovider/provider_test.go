@@ -39,7 +39,7 @@ func NewTestClient() *testClient {
 	return &testClient{
 		Get: func(uri string) (resp *http.Response, err error) {
 			// read local config file and return
-			f, err := ioutil.ReadFile("../../testdata/config.yaml")
+			f, err := ioutil.ReadFile("./testdata/otel-config.yaml")
 			if err != nil {
 				return &http.Response{}, err
 			}
