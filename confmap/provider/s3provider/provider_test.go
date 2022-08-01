@@ -31,11 +31,12 @@ import (
 	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
-// testRetrieve and testClient: Mock how Retrieve() and S3 client works in normal cases
+// Interface testClient standardizes GetObject, which mocks S3 client works
 type testClient struct {
 	GetObject func(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 }
 
+// Create a client mocking S3 client works in normal cases
 func NewTestClient() *testClient {
 	return &testClient{
 		GetObject: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -48,6 +49,7 @@ func NewTestClient() *testClient {
 		}}
 }
 
+// testRetrieve: Mock how Retrieve() works in normal cases
 type testRetrieve struct {
 	client *testClient
 }
@@ -95,13 +97,9 @@ func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testInvalidClient and testInvalidRetrieve: Mock how Retrieve() and S3 client works when the returned config file is invalid
-type testInvalidClient struct {
-	GetObject func(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
-}
-
-func NewTestInvalidClient() *testInvalidClient {
-	return &testInvalidClient{
+// Create a client mocking S3 client works when the returned config file is invalid
+func NewTestInvalidClient() *testClient {
+	return &testClient{
 		GetObject: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 			// read local config file and return
 			f := []byte("wrong yaml:[")
@@ -109,8 +107,9 @@ func NewTestInvalidClient() *testInvalidClient {
 		}}
 }
 
+// testInvalidRetrieve: Mock how Retrieve() and S3 client works when the returned config file is invalid
 type testInvalidRetrieve struct {
-	client *testInvalidClient
+	client *testClient
 }
 
 func NewTestInvalidRetrieve() confmap.Provider {
@@ -156,13 +155,9 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExistClient and testNonExistRetrieve: Mock how Retrieve() and s3 client works when there is no corresponding config file according to the given s3-uri
-type testNonExistClient struct {
-	GetObject func(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
-}
-
-func NewTestNonExistClient() *testNonExistClient {
-	return &testNonExistClient{
+// Create a client mocking S3 client works when there is no corresponding config file according to the given s3-uri
+func NewTestNonExistClient() *testClient {
+	return &testClient{
 		GetObject: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 			// read local config file and return
 			f, err := ioutil.ReadFile("../../testdata/nonexist-config.yaml")
@@ -173,8 +168,9 @@ func NewTestNonExistClient() *testNonExistClient {
 		}}
 }
 
+// testNonExistRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given s3-uri
 type testNonExistRetrieve struct {
-	client *testNonExistClient
+	client *testClient
 }
 
 func NewTestNonExistRetrieve() confmap.Provider {
