@@ -137,7 +137,8 @@ func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watche
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f, err := ioutil.ReadFile("./testdata/nonexist-otel-config.yaml")
 		if err != nil {
-			log.Fatal("HTTP server fails to read config file and return")
+			w.WriteHeader(404)
+			return
 		}
 		w.WriteHeader(200)
 		w.Write(f)
@@ -150,6 +151,11 @@ func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watche
 
 	resp := w.Result()
 	defer resp.Body.Close()
+
+	// if the http status code is 404, non-exist
+	if resp.StatusCode == 404 {
+		return confmap.Retrieved{}, fmt.Errorf("fail to download the response body from uri %q", uri)
+	}
 
 	// read the response body
 	body, err := ioutil.ReadAll(resp.Body)
