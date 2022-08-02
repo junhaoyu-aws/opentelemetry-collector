@@ -15,12 +15,12 @@
 package httpprovider
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -30,29 +30,11 @@ import (
 	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
-// testRetrieve and testClient: Mock how Retrieve() and HTTP client works in normal cases
-type testClient struct {
-	Get func(uri string) (resp *http.Response, err error)
-}
-
-func NewTestClient() *testClient {
-	return &testClient{
-		Get: func(uri string) (resp *http.Response, err error) {
-			// read local config file and return
-			f, err := ioutil.ReadFile("./testdata/otel-config.yaml")
-			if err != nil {
-				return &http.Response{}, err
-			}
-			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
-		}}
-}
-
-type testRetrieve struct {
-	httpClient *testClient
-}
+// testRetrieve: Mock how Retrieve() works in normal cases
+type testRetrieve struct{}
 
 func NewTestRetrieve() confmap.Provider {
-	return &testRetrieve{httpClient: NewTestClient()}
+	return &testRetrieve{}
 }
 
 func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -60,11 +42,22 @@ func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confma
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
-	// send a HTTP GET request
-	resp, err := fp.httpClient.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
-	}
+	// mock a HTTP server via httptest
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := ioutil.ReadFile("./testdata/otel-config.yaml")
+		if err != nil {
+			log.Fatal("HTTP server fails to read config file and return")
+		}
+		w.WriteHeader(200)
+		w.Write(f)
+	})
+
+	// get request
+	req := httptest.NewRequest("GET", uri, nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	resp := w.Result()
 	defer resp.Body.Close()
 
 	// read the response body
@@ -84,26 +77,11 @@ func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testInvalidClient and testInvalidRetrieve: Mock how Retrieve() and HTTP client works when the returned config file is invalid
-type testInvalidClient struct {
-	Get func(uri string) (resp *http.Response, err error)
-}
-
-func NewTestInvalidClient() *testInvalidClient {
-	return &testInvalidClient{
-		Get: func(uri string) (resp *http.Response, err error) {
-			// read local config file and return
-			f := []byte("wrong yaml:[")
-			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
-		}}
-}
-
-type testInvalidRetrieve struct {
-	httpClient *testInvalidClient
-}
+// testRetrieve: Mock how Retrieve() works when the returned config file is invalid
+type testInvalidRetrieve struct{}
 
 func NewTestInvalidRetrieve() confmap.Provider {
-	return &testInvalidRetrieve{httpClient: NewTestInvalidClient()}
+	return &testInvalidRetrieve{}
 }
 
 func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -111,11 +89,19 @@ func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
-	// send a HTTP GET request
-	resp, err := fp.httpClient.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
-	}
+	// mock a HTTP server via httptest
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f := []byte("wrong yaml:[")
+		w.WriteHeader(200)
+		w.Write(f)
+	})
+
+	// get request
+	req := httptest.NewRequest("GET", uri, nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	resp := w.Result()
 	defer resp.Body.Close()
 
 	// read the response body
@@ -135,29 +121,11 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExistClient and testNonExistRetrieve: Mock how Retrieve() and HTTP client works when there is no corresponding config file according to the given http-uri
-type testNonExistClient struct {
-	Get func(uri string) (resp *http.Response, err error)
-}
-
-func NewTestNonExistClient() *testNonExistClient {
-	return &testNonExistClient{
-		Get: func(uri string) (resp *http.Response, err error) {
-			// read local config file and return
-			f, err := ioutil.ReadFile("../../testdata/nonexist-config.yaml")
-			if err != nil {
-				return &http.Response{}, err
-			}
-			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
-		}}
-}
-
-type testNonExistRetrieve struct {
-	httpClient *testNonExistClient
-}
+// testRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given http-uri
+type testNonExistRetrieve struct{}
 
 func NewTestNonExistRetrieve() confmap.Provider {
-	return &testNonExistRetrieve{httpClient: NewTestNonExistClient()}
+	return &testNonExistRetrieve{}
 }
 
 func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -165,11 +133,22 @@ func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watche
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
-	// send a HTTP GET request
-	resp, err := fp.httpClient.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
-	}
+	// mock a HTTP server via httptest
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := ioutil.ReadFile("./testdata/nonexist-otel-config.yaml")
+		if err != nil {
+			log.Fatal("HTTP server fails to read config file and return")
+		}
+		w.WriteHeader(200)
+		w.Write(f)
+	})
+
+	// get request
+	req := httptest.NewRequest("GET", uri, nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	resp := w.Result()
 	defer resp.Body.Close()
 
 	// read the response body
