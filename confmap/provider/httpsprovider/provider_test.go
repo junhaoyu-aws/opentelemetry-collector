@@ -95,7 +95,7 @@ func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testRetrieve: Mock how Retrieve() works when the returned config file is invalid
+// testInvalidRetrieve: Mock how Retrieve() works when the returned config file is invalid
 type testInvalidRetrieve struct{}
 
 func NewTestInvalidRetrieve() confmap.Provider {
@@ -156,7 +156,7 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given http-uri
+// testNonExistRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given http-uri
 type testNonExistRetrieve struct{}
 
 func NewTestNonExistRetrieve() confmap.Provider {
@@ -226,7 +226,7 @@ func (fp *testNonExistRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testRetrieve: Mock how Retrieve() works when the RootCA is not from a trusted CA
+// testNoRootCARetrieve: Mock how Retrieve() works when the RootCA is not from a trusted CA
 type testNoRootCARetrieve struct{}
 
 func NewTestNoRootCARetrieve() confmap.Provider {
