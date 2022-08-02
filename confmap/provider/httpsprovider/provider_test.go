@@ -15,13 +15,13 @@
 package httpsprovider
 
 import (
-	"bytes"
 	"context"
 	"crypto/x509"
 	"fmt"
-	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -31,29 +31,11 @@ import (
 	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
-// testRetrieve and testClient: Mock how Retrieve() and HTTPS client works in normal cases
-type testClient struct {
-	Get func(uri string) (resp *http.Response, err error)
-}
-
-func NewTestClient() *testClient {
-	return &testClient{
-		Get: func(uri string) (resp *http.Response, err error) {
-			// read local config file and return
-			f, err := ioutil.ReadFile("../../testdata/config.yaml")
-			if err != nil {
-				return &http.Response{}, err
-			}
-			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
-		}}
-}
-
-type testRetrieve struct {
-	httpsClient *testClient
-}
+// testRetrieve: Mock how Retrieve() works in normal cases
+type testRetrieve struct{}
 
 func NewTestRetrieve() confmap.Provider {
-	return &testRetrieve{httpsClient: NewTestClient()}
+	return &testRetrieve{}
 }
 
 func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -78,17 +60,26 @@ func (fp *testRetrieve) Retrieve(ctx context.Context, uri string, watcher confma
 		return confmap.Retrieved{}, fmt.Errorf("unable to add CA from uri %q into the cert pool", myCAPath)
 	}
 
-	// https client
-	httpsClient := fp.httpsClient
+	// mock a HTTPS server via httptest
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := ioutil.ReadFile("./testdata/otel-config.yaml")
+		if err != nil {
+			log.Fatal("HTTP server fails to read config file and return")
+		}
+		w.WriteHeader(200)
+		w.Write(f)
+	})
 
-	//GET
-	r, err := httpsClient.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q", uri)
-	}
-	defer r.Body.Close()
+	// get request
+	req := httptest.NewRequest("GET", uri, nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
 
-	body, err := ioutil.ReadAll(r.Body)
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// read the response body
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
 	}
@@ -104,26 +95,11 @@ func (fp *testRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testInvalidClient and testInvalidRetrieve: Mock how Retrieve() and HTTPS client works when the returned config file is invalid
-type testInvalidClient struct {
-	Get func(uri string) (resp *http.Response, err error)
-}
-
-func NewTestInvalidClient() *testInvalidClient {
-	return &testInvalidClient{
-		Get: func(uri string) (resp *http.Response, err error) {
-			// read local config file and return
-			f := []byte("wrong yaml:[")
-			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
-		}}
-}
-
-type testInvalidRetrieve struct {
-	httpsClient *testInvalidClient
-}
+// testRetrieve: Mock how Retrieve() works when the returned config file is invalid
+type testInvalidRetrieve struct{}
 
 func NewTestInvalidRetrieve() confmap.Provider {
-	return &testInvalidRetrieve{httpsClient: NewTestInvalidClient()}
+	return &testInvalidRetrieve{}
 }
 
 func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -148,17 +124,23 @@ func (fp *testInvalidRetrieve) Retrieve(ctx context.Context, uri string, watcher
 		return confmap.Retrieved{}, fmt.Errorf("unable to add CA from uri %q into the cert pool", myCAPath)
 	}
 
-	// https client
-	httpsClient := fp.httpsClient
+	// mock a HTTPS server via httptest
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f := []byte("wrong yaml:[")
+		w.WriteHeader(200)
+		w.Write(f)
+	})
 
-	//GET
-	r, err := httpsClient.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q", uri)
-	}
-	defer r.Body.Close()
+	// get request
+	req := httptest.NewRequest("GET", uri, nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
 
-	body, err := ioutil.ReadAll(r.Body)
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// read the response body
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
 	}
@@ -174,29 +156,11 @@ func (fp *testInvalidRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNonExistClient and testNonExistRetrieve: Mock how Retrieve() and HTTPS client works when there is no corresponding config file according to the given https-uri
-type testNonExistClient struct {
-	Get func(uri string) (resp *http.Response, err error)
-}
-
-func NewTestNonExistClient() *testNonExistClient {
-	return &testNonExistClient{
-		Get: func(uri string) (resp *http.Response, err error) {
-			// read local config file and return
-			f, err := ioutil.ReadFile("../../testdata/nonexist-config.yaml")
-			if err != nil {
-				return &http.Response{}, err
-			}
-			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
-		}}
-}
-
-type testNonExistRetrieve struct {
-	httpsClient *testNonExistClient
-}
+// testRetrieve: Mock how Retrieve() works when there is no corresponding config file according to the given http-uri
+type testNonExistRetrieve struct{}
 
 func NewTestNonExistRetrieve() confmap.Provider {
-	return &testNonExistRetrieve{httpsClient: NewTestNonExistClient()}
+	return &testNonExistRetrieve{}
 }
 
 func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -221,17 +185,32 @@ func (fp *testNonExistRetrieve) Retrieve(ctx context.Context, uri string, watche
 		return confmap.Retrieved{}, fmt.Errorf("unable to add CA from uri %q into the cert pool", myCAPath)
 	}
 
-	// https client
-	httpsClient := fp.httpsClient
+	// mock a HTTPS server via httptest
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := ioutil.ReadFile("./testdata/nonexist-otel-config.yaml")
+		if err != nil {
+			w.WriteHeader(404)
+			return
+		}
+		w.WriteHeader(200)
+		w.Write(f)
+	})
 
-	//GET
-	r, err := httpsClient.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q", uri)
+	// get request
+	req := httptest.NewRequest("GET", uri, nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// if the http status code is 404, non-exist
+	if resp.StatusCode == 404 {
+		return confmap.Retrieved{}, fmt.Errorf("fail to download the response body from uri %q", uri)
 	}
-	defer r.Body.Close()
 
-	body, err := ioutil.ReadAll(r.Body)
+	// read the response body
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
 	}
@@ -247,29 +226,11 @@ func (fp *testNonExistRetrieve) Shutdown(context.Context) error {
 	return nil
 }
 
-// testNoRootCAClient and testNoRootCARetrieve: Mock how Retrieve() and HTTPS client works when there is no corresponding Root CA for env SSL_CERT_FILE
-type testNoRootCAClient struct {
-	Get func(uri string) (resp *http.Response, err error)
-}
-
-func NewTestNoRootCAClient() *testNoRootCAClient {
-	return &testNoRootCAClient{
-		Get: func(uri string) (resp *http.Response, err error) {
-			// read local config file and return
-			f, err := ioutil.ReadFile("../../testdata/nonexist-config.yaml")
-			if err != nil {
-				return &http.Response{}, err
-			}
-			return &http.Response{Body: io.NopCloser(bytes.NewReader(f))}, nil
-		}}
-}
-
-type testNoRootCARetrieve struct {
-	httpsClient *testNoRootCAClient
-}
+// testRetrieve: Mock how Retrieve() works when the RootCA is not from a trusted CA
+type testNoRootCARetrieve struct{}
 
 func NewTestNoRootCARetrieve() confmap.Provider {
-	return &testNoRootCARetrieve{httpsClient: NewTestNoRootCAClient()}
+	return &testNoRootCARetrieve{}
 }
 
 func (fp *testNoRootCARetrieve) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -278,7 +239,7 @@ func (fp *testNoRootCARetrieve) Retrieve(ctx context.Context, uri string, watche
 	}
 
 	// create a certificate pool, then add the root CA into it
-	myCAPath := "./testdata/nonexist-RootCA.crt"
+	myCAPath := "./testdata/nontrusted-RootCA.crt"
 	if myCAPath == "" {
 		return confmap.Retrieved{}, fmt.Errorf("unable to fetch the Root CA for uri %q", uri)
 	}
@@ -294,17 +255,26 @@ func (fp *testNoRootCARetrieve) Retrieve(ctx context.Context, uri string, watche
 		return confmap.Retrieved{}, fmt.Errorf("unable to add CA from uri %q into the cert pool", myCAPath)
 	}
 
-	// https client
-	httpsClient := fp.httpsClient
+	// mock a HTTPS server via httptest
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := ioutil.ReadFile("./testdata/otel-config.yaml")
+		if err != nil {
+			log.Fatal("HTTP server fails to read config file and return")
+		}
+		w.WriteHeader(200)
+		w.Write(f)
+	})
 
-	//GET
-	r, err := httpsClient.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q", uri)
-	}
-	defer r.Body.Close()
+	// get request
+	req := httptest.NewRequest("GET", uri, nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
 
-	body, err := ioutil.ReadAll(r.Body)
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// read the response body
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
 	}
