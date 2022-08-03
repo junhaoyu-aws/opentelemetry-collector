@@ -17,14 +17,13 @@ package s3provider
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/url"
 	"regexp"
 	"strings"
 
 	"go.opentelemetry.io/collector/confmap"
-	"go.opentelemetry.io/collector/confmap/provider/internal"
+	"gopkg.in/yaml.v2"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -79,15 +78,15 @@ func (fmp *provider) Retrieve(ctx context.Context, uri string, _ confmap.Watcher
 		return confmap.Retrieved{}, fmt.Errorf("file in S3 failed to fetch : uri %q", uri)
 	}
 
-	// create a buffer and read content from the response body
-	buffer := make([]byte, int(resp.ContentLength))
+	// read config from response body
+	dec := yaml.NewDecoder(resp.Body)
 	defer resp.Body.Close()
-	_, err = resp.Body.Read(buffer)
-	if err != io.EOF && err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("failed to read content from the downloaded config file via uri %q", uri)
+	var conf map[string]interface{}
+	err = dec.Decode(&conf)
+	if err != nil {
+		return confmap.Retrieved{}, err
 	}
-
-	return internal.NewRetrievedFromYAML(buffer)
+	return confmap.NewRetrieved(conf)
 }
 
 func (*provider) Scheme() string {
