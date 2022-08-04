@@ -34,8 +34,12 @@ const (
 	schemeName = "s3"
 )
 
+type s3Client interface {
+	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+}
+
 type provider struct {
-	client *s3.Client
+	client s3Client
 }
 
 // New returns a new confmap.Provider that reads the configuration from a file.
@@ -112,7 +116,7 @@ func s3URISplit(uri string) (string, string, string, error) {
 	// parse the uri as [scheme:][//[userinfo@]host][/]path[?query][#fragment], then extract components from
 	u, err := url.Parse(uri)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to change the s3-uri to url.URL")
+		return "", "", "", fmt.Errorf("failed to change the s3-uri to url.URL: %w", err)
 	}
 	// extract components
 	key := strings.TrimPrefix(u.Path, "/")
