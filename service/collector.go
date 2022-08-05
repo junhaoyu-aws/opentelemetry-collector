@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -126,6 +127,21 @@ func (col *Collector) Shutdown() {
 // runAndWaitForShutdownEvent waits for one of the shutdown events that can happen.
 func (col *Collector) runAndWaitForShutdownEvent(ctx context.Context) error {
 	col.service.telemetrySettings.Logger.Info("Everything is ready. Begin running and processing data.")
+	// Create a HTTP server to receive signals for hot-reload
+
+	http.HandleFunc("/configHotReload", func(w http.ResponseWriter, r *http.Request) {
+		col.service.telemetrySettings.Logger.Info("Config hot reload...")
+		col.service.Shutdown(ctx)
+		col.service.Start(ctx)
+		col.service.telemetrySettings.Logger.Info("Config hot reload done!")
+	})
+	err := http.ListenAndServe(":5555", nil)
+	if errors.Is(err, http.ErrServerClosed) {
+		fmt.Printf("server closed\n")
+	} else if err != nil {
+		fmt.Printf("error starting server: %s\n", err)
+		os.Exit(1)
+	}
 
 	col.signalsChannel = make(chan os.Signal, 1)
 	// Only notify with SIGTERM and SIGINT if graceful shutdown is enabled.
