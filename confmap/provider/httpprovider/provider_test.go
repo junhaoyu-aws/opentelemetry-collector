@@ -17,7 +17,6 @@ package httpprovider
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -27,16 +26,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
-	"go.opentelemetry.io/collector/confmap/provider/internal"
 )
 
 // A HTTP client mocking httpmapprovider works in normal cases
 type testClient struct{}
-
-// A provider mocking httpmapprovider works in normal cases
-type testProvider struct {
-	client testClient
-}
 
 // Implement Get() for testClient in normal cases
 func (client *testClient) Get(url string) (resp *http.Response, err error) {
@@ -49,48 +42,11 @@ func (client *testClient) Get(url string) (resp *http.Response, err error) {
 
 // Create a provider mocking httpmapprovider works in normal cases
 func NewTestProvider() confmap.Provider {
-	return &testProvider{client: testClient{}}
-}
-
-func (fp *testProvider) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	if !strings.HasPrefix(uri, schemeName+"://") {
-		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
-	}
-
-	// get request
-	resp, err := fp.client.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
-	}
-	defer resp.Body.Close()
-	// if the http status code is 404, non-exist
-	if resp.StatusCode == 404 {
-		return confmap.Retrieved{}, fmt.Errorf("fail to download the response body from uri %q", uri)
-	}
-	// read the response body
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
-	}
-
-	return internal.NewRetrievedFromYAML(body)
-}
-
-func (fp *testProvider) Scheme() string {
-	return schemeName
-}
-
-func (fp *testProvider) Shutdown(context.Context) error {
-	return nil
+	return &provider{client: &testClient{}}
 }
 
 // A HTTP client mocking httpmapprovider works when the returned config file is invalid
 type testInvalidClient struct{}
-
-// A provider mocking httpmapprovider works when the returned config file is invalid
-type testInvalidProvider struct {
-	client testInvalidClient
-}
 
 // Implement Get() for testInvalidClient when the returned config file is invalid
 func (client *testInvalidClient) Get(url string) (resp *http.Response, err error) {
@@ -100,48 +56,11 @@ func (client *testInvalidClient) Get(url string) (resp *http.Response, err error
 
 // Create a provider mocking httpmapprovider works when the returned config file is invalid
 func NewTestInvalidProvider() confmap.Provider {
-	return &testInvalidProvider{client: testInvalidClient{}}
-}
-
-func (fp *testInvalidProvider) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	if !strings.HasPrefix(uri, schemeName+"://") {
-		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
-	}
-
-	// get request
-	resp, err := fp.client.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
-	}
-	defer resp.Body.Close()
-	// if the http status code is 404, non-exist
-	if resp.StatusCode == 404 {
-		return confmap.Retrieved{}, fmt.Errorf("fail to download the response body from uri %q", uri)
-	}
-	// read the response body
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
-	}
-
-	return internal.NewRetrievedFromYAML(body)
-}
-
-func (fp *testInvalidProvider) Scheme() string {
-	return schemeName
-}
-
-func (fp *testInvalidProvider) Shutdown(context.Context) error {
-	return nil
+	return &provider{client: &testInvalidClient{}}
 }
 
 // A HTTP client mocking httpmapprovider works when there is no corresponding config file according to the given http-uri
 type testNonExistClient struct{}
-
-// A provider mocking httpmapprovider works when there is no corresponding config file according to the given http-uri
-type testNonExistProvider struct {
-	client testNonExistClient
-}
 
 // Implement Get() for testNonExistClient when there is no corresponding config file according to the given http-uri
 func (client *testNonExistClient) Get(url string) (resp *http.Response, err error) {
@@ -154,39 +73,7 @@ func (client *testNonExistClient) Get(url string) (resp *http.Response, err erro
 
 // Create a provider mocking httpmapprovider works when there is no corresponding config file according to the given http-uri
 func NewTestNonExistProvider() confmap.Provider {
-	return &testNonExistProvider{client: testNonExistClient{}}
-}
-
-func (fp *testNonExistProvider) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (confmap.Retrieved, error) {
-	if !strings.HasPrefix(uri, schemeName+"://") {
-		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
-	}
-
-	// get request
-	resp, err := fp.client.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
-	}
-	defer resp.Body.Close()
-	// if the http status code is 404, non-exist
-	if resp.StatusCode == 404 {
-		return confmap.Retrieved{}, fmt.Errorf("fail to download the response body from uri %q", uri)
-	}
-	// read the response body
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
-	}
-
-	return internal.NewRetrievedFromYAML(body)
-}
-
-func (fp *testNonExistProvider) Scheme() string {
-	return schemeName
-}
-
-func (fp *testNonExistProvider) Shutdown(context.Context) error {
-	return nil
+	return &provider{client: &testNonExistClient{}}
 }
 
 func TestFunctionalityDownloadFileHTTP(t *testing.T) {
