@@ -20,10 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
 	"go.uber.org/atomic"
 	"go.uber.org/multierr"
@@ -126,6 +128,43 @@ func (col *Collector) Shutdown() {
 // runAndWaitForShutdownEvent waits for one of the shutdown events that can happen.
 func (col *Collector) runAndWaitForShutdownEvent(ctx context.Context) error {
 	col.service.telemetrySettings.Logger.Info("Everything is ready. Begin running and processing data.")
+	// Create a HTTP server to receive signals for hot-reload
+	if ctx.Value("configURIs") != "" {
+		filepath := ctx.Value("configURIs").(string)
+		log.Println(filepath + ".....")
+		initialStat, err := os.Stat(filepath)
+		log.Println(initialStat)
+		if err != nil {
+			panic(err)
+		}
+		go func() {
+			for {
+				stat, err := os.Stat(filepath)
+				// maybe visiting at the timing that the file is deleted
+				if err != nil {
+					retryLimit := 3
+					retryCount := 0
+				INNER:
+					for retryCount < retryLimit {
+						time.Sleep(1 * time.Second)
+						stat, err = os.Stat(filepath)
+						retryCount++
+						if err == nil {
+							break INNER
+						}
+					}
+				}
+
+				if stat.Size() != initialStat.Size() || stat.ModTime() != initialStat.ModTime() {
+					initialStat = stat
+					col.service.telemetrySettings.Logger.Info("Config hot reload...")
+					col.service.Shutdown(ctx)
+					col.service.Start(ctx)
+					col.service.telemetrySettings.Logger.Info("Config hot reload done!")
+				}
+			}
+		}()
+	}
 
 	col.signalsChannel = make(chan os.Signal, 1)
 	// Only notify with SIGTERM and SIGINT if graceful shutdown is enabled.
