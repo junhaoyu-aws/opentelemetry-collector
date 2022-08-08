@@ -32,7 +32,13 @@ const (
 	schemeName = "https"
 )
 
-type provider struct{}
+type httpsClient interface {
+	Get(url string) (resp *http.Response, err error)
+}
+
+type provider struct {
+	client httpsClient
+}
 
 // New returns a new confmap.Provider that reads the configuration from a file.
 //
@@ -44,7 +50,32 @@ type provider struct{}
 // Examples:
 // `https://localhost:4444/getConfig` - (unix, windows)
 func New() confmap.Provider {
-	return &provider{}
+	// create a certificate pool, then add the root CA into it
+	myCAPath := os.Getenv("SSL_CERT_FILE")
+	if myCAPath == "" {
+		fmt.Println("unable to fetch the Root CA")
+	}
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		fmt.Println("unable to create a cert pool")
+	}
+	crt, err := ioutil.ReadFile(myCAPath)
+	if err != nil {
+		fmt.Println("unable to read CA from uri: ", myCAPath)
+	}
+	if ok := pool.AppendCertsFromPEM(crt); !ok {
+		fmt.Println("unable to add CA from uri: ", myCAPath, " into the cert pool")
+	}
+
+	// return
+	return &provider{client: &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: false,
+				RootCAs:            pool,
+			},
+		},
+	}}
 }
 
 func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFunc) (confmap.Retrieved, error) {
@@ -52,43 +83,17 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
-	// create a certificate pool, then add the root CA into it
-	myCAPath := os.Getenv("SSL_CERT_FILE")
-	if myCAPath == "" {
-		return confmap.Retrieved{}, fmt.Errorf("unable to fetch the Root CA for uri %q", uri)
-	}
-	pool, err := x509.SystemCertPool()
+	// GET request
+	r, err := fmp.client.Get(uri)
 	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to create a cert pool")
-	}
-	crt, err := ioutil.ReadFile(myCAPath)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to read CA from uri %q", myCAPath)
-	}
-	if ok := pool.AppendCertsFromPEM(crt); !ok {
-		return confmap.Retrieved{}, fmt.Errorf("unable to add CA from uri %q into the cert pool", myCAPath)
-	}
-
-	// https client
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: false,
-				RootCAs:            pool,
-			},
-		},
-	}
-
-	//GET
-	r, err := client.Get(uri)
-	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q", uri)
+		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q, with err: %w", uri, err)
 	}
 	defer r.Body.Close()
 
+	// read the response body
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
+		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q, with err: %w", uri, err)
 	}
 
 	return internal.NewRetrievedFromYAML(body)
