@@ -132,6 +132,10 @@ func (col *Collector) runAndWaitForShutdownEvent(ctx context.Context) error {
 	http.HandleFunc("/configHotReload", func(w http.ResponseWriter, r *http.Request) {
 		col.service.telemetrySettings.Logger.Info("Config hot reload...")
 		col.service.Shutdown(ctx)
+		// reload the configurations
+		newCfgSet := newDefaultConfigProviderSettings(ctx.Value("configURIs").([]string))
+		col.set.ConfigProvider, _ = NewConfigProvider(newCfgSet)
+		// restart the components
 		col.service.Start(ctx)
 		col.service.telemetrySettings.Logger.Info("Config hot reload done!")
 	})
