@@ -17,6 +17,7 @@ package httpprovider
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -50,8 +51,7 @@ type testInvalidClient struct{}
 
 // Implement Get() for testInvalidClient when the returned config file is invalid
 func (client *testInvalidClient) Get(url string) (resp *http.Response, err error) {
-	f := []byte("wrong yaml:[")
-	return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(f))}, nil
+	return &http.Response{}, fmt.Errorf("the downloaded config file is invalid")
 }
 
 // Create a provider mocking httpmapprovider works when the returned config file is invalid

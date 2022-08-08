@@ -59,14 +59,14 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 	// send a HTTP GET request
 	resp, err := fmp.client.Get(uri)
 	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q", uri)
+		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTP GET for uri %q, with err: %w ", uri, err)
 	}
 	defer resp.Body.Close()
 
 	// read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q", uri)
+		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q, with err: %w ", uri, err)
 	}
 
 	return internal.NewRetrievedFromYAML(body)
