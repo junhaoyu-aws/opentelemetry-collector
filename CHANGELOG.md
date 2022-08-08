@@ -5,6 +5,7 @@
 ### 💡 Enhancements 💡
 
 - Add `linux-ppc64le` architecture to cross build tests in CI
+- Add `s3provider` provider to allow loading config files stored in Amazon S3
 
 ### 🧰 Bug fixes 🧰
 
