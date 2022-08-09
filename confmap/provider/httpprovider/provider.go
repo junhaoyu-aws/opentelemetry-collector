@@ -61,6 +61,11 @@ func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFu
 	}
 	defer resp.Body.Close()
 
+	// check the HTTP status code
+	if resp.StatusCode != 200 {
+		return confmap.Retrieved{}, fmt.Errorf("404: resource didn't exist, fail to read the response body from uri %q", uri)
+	}
+
 	// read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

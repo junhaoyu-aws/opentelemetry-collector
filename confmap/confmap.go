@@ -93,8 +93,6 @@ func (l *Conf) Merge(in *Conf) error {
 	return l.k.Merge(in.k)
 }
 
-// test
-
 // Sub returns new Conf instance representing a sub-config of this instance.
 // It returns an error is the sub-config is not a map[string]interface{} (use Get()), and an empty Map if none exists.
 func (l *Conf) Sub(key string) (*Conf, error) {
