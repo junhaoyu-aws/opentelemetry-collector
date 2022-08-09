@@ -27,6 +27,8 @@ import (
 	"go.opentelemetry.io/collector/service/internal/configunmarshaler"
 )
 
+// test
+
 // ConfigProvider provides the service configuration.
 //
 // The typical usage is the following:
