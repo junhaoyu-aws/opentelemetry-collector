@@ -30,14 +30,16 @@ func NewCommand(set CollectorSettings) *cobra.Command {
 		Version:      set.BuildInfo.Version,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			featuregate.GetRegistry().Apply(gatesList)
+			if err := featuregate.GetRegistry().Apply(gatesList); err != nil {
+				return err
+			}
 			if set.ConfigProvider == nil {
 				var err error
 				cfgSet := newDefaultConfigProviderSettings(getConfigFlag(flagSet))
 				// Append the "overwrite properties converter" as the first converter.
-				cfgSet.MapConverters = append(
+				cfgSet.ResolverSettings.Converters = append(
 					[]confmap.Converter{overwritepropertiesconverter.New(getSetFlag(flagSet))},
-					cfgSet.MapConverters...)
+					cfgSet.ResolverSettings.Converters...)
 				set.ConfigProvider, err = NewConfigProvider(cfgSet)
 				if err != nil {
 					return err

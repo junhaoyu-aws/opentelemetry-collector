@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//       http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
+	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/internal/obsreportconfig/obsmetrics"
@@ -50,7 +51,7 @@ func TestTracesRequest(t *testing.T) {
 	mr := newTracesRequest(context.Background(), testdata.GenerateTraces(1), nil)
 
 	traceErr := consumererror.NewTraces(errors.New("some error"), ptrace.NewTraces())
-	assert.EqualValues(t, newTracesRequest(context.Background(), ptrace.NewTraces(), nil), mr.onError(traceErr))
+	assert.EqualValues(t, newTracesRequest(context.Background(), ptrace.NewTraces(), nil), mr.OnError(traceErr))
 }
 
 func TestTracesExporter_InvalidName(t *testing.T) {
@@ -104,7 +105,9 @@ func TestTracesExporter_Default_ReturnError(t *testing.T) {
 }
 
 func TestTracesExporter_WithRecordMetrics(t *testing.T) {
-	te, err := NewTracesExporter(&fakeTracesExporterConfig, componenttest.NewNopExporterCreateSettings(), newTraceDataPusher(nil))
+	set := componenttest.NewNopExporterCreateSettings()
+	set.TelemetrySettings.MetricsLevel = configtelemetry.LevelNormal
+	te, err := NewTracesExporter(&fakeTracesExporterConfig, set, newTraceDataPusher(nil))
 	require.NoError(t, err)
 	require.NotNil(t, te)
 
@@ -113,7 +116,9 @@ func TestTracesExporter_WithRecordMetrics(t *testing.T) {
 
 func TestTracesExporter_WithRecordMetrics_ReturnError(t *testing.T) {
 	want := errors.New("my_error")
-	te, err := NewTracesExporter(&fakeTracesExporterConfig, componenttest.NewNopExporterCreateSettings(), newTraceDataPusher(want))
+	set := componenttest.NewNopExporterCreateSettings()
+	set.TelemetrySettings.MetricsLevel = configtelemetry.LevelNormal
+	te, err := NewTracesExporter(&fakeTracesExporterConfig, set, newTraceDataPusher(want))
 	require.NoError(t, err)
 	require.NotNil(t, te)
 

@@ -331,21 +331,6 @@ func Build(ctx context.Context, set Settings) (*Pipelines, error) {
 	return exps, nil
 }
 
-func logStabilityMessage(logger *zap.Logger, sl component.StabilityLevel) {
-	switch sl {
-	case component.StabilityLevelDeprecated:
-		logger.Info("Component has been deprecated and will be removed in future releases.", zap.String(components.ZapStabilityKey, sl.String()))
-	case component.StabilityLevelUnmaintained:
-		logger.Info("Component is unmaintained and actively looking for contributors. This component will become deprecated after 6 months of remaining unmaintained", zap.String(components.ZapStabilityKey, sl.String()))
-	case component.StabilityLevelInDevelopment:
-		logger.Info("Component is under development.", zap.String(components.ZapStabilityKey, sl.String()))
-	case component.StabilityLevelAlpha, component.StabilityLevelBeta, component.StabilityLevelStable:
-		logger.Debug("Stability level", zap.String(components.ZapStabilityKey, sl.String()))
-	default:
-		logger.Debug("Stability level of component undefined", zap.String(components.ZapStabilityKey, sl.String()))
-	}
-}
-
 func buildExporter(
 	ctx context.Context,
 	settings component.TelemetrySettings,
@@ -370,7 +355,7 @@ func buildExporter(
 		BuildInfo:         buildInfo,
 	}
 	set.TelemetrySettings.Logger = exporterLogger(settings.Logger, id, pipelineID.Type())
-	logStabilityMessage(set.TelemetrySettings.Logger, factory.StabilityLevel(pipelineID.Type()))
+	components.LogStabilityLevel(set.TelemetrySettings.Logger, getExporterStabilityLevel(factory, pipelineID.Type()))
 
 	exp, err := createExporter(ctx, set, cfg, id, pipelineID, factory)
 	if err != nil {
@@ -428,6 +413,18 @@ func exporterLogger(logger *zap.Logger, id config.ComponentID, dt config.DataTyp
 		zap.String(components.ZapNameKey, id.String()))
 }
 
+func getExporterStabilityLevel(factory component.ExporterFactory, dt config.DataType) component.StabilityLevel {
+	switch dt {
+	case config.TracesDataType:
+		return factory.TracesExporterStability()
+	case config.MetricsDataType:
+		return factory.MetricsExporterStability()
+	case config.LogsDataType:
+		return factory.LogsExporterStability()
+	}
+	return component.StabilityLevelUndefined
+}
+
 func buildProcessor(ctx context.Context,
 	settings component.TelemetrySettings,
 	buildInfo component.BuildInfo,
@@ -452,7 +449,7 @@ func buildProcessor(ctx context.Context,
 		BuildInfo:         buildInfo,
 	}
 	set.TelemetrySettings.Logger = processorLogger(settings.Logger, id, pipelineID)
-	logStabilityMessage(set.TelemetrySettings.Logger, factory.StabilityLevel(pipelineID.Type()))
+	components.LogStabilityLevel(set.TelemetrySettings.Logger, getProcessorStabilityLevel(factory, pipelineID.Type()))
 
 	proc, err := createProcessor(ctx, set, procCfg, id, pipelineID, next, factory)
 	if err != nil {
@@ -482,6 +479,18 @@ func processorLogger(logger *zap.Logger, procID config.ComponentID, pipelineID c
 		zap.String(components.ZapKindPipeline, pipelineID.String()))
 }
 
+func getProcessorStabilityLevel(factory component.ProcessorFactory, dt config.DataType) component.StabilityLevel {
+	switch dt {
+	case config.TracesDataType:
+		return factory.TracesProcessorStability()
+	case config.MetricsDataType:
+		return factory.MetricsProcessorStability()
+	case config.LogsDataType:
+		return factory.LogsProcessorStability()
+	}
+	return component.StabilityLevelUndefined
+}
+
 func buildReceiver(ctx context.Context,
 	settings component.TelemetrySettings,
 	buildInfo component.BuildInfo,
@@ -506,7 +515,7 @@ func buildReceiver(ctx context.Context,
 		BuildInfo:         buildInfo,
 	}
 	set.TelemetrySettings.Logger = receiverLogger(settings.Logger, id, pipelineID.Type())
-	logStabilityMessage(set.TelemetrySettings.Logger, factory.StabilityLevel(pipelineID.Type()))
+	components.LogStabilityLevel(set.TelemetrySettings.Logger, getReceiverStabilityLevel(factory, pipelineID.Type()))
 
 	recv, err := createReceiver(ctx, set, cfg, id, pipelineID, nexts, factory)
 	if err != nil {
@@ -545,6 +554,18 @@ func receiverLogger(logger *zap.Logger, id config.ComponentID, dt config.DataTyp
 		zap.String(components.ZapKindKey, components.ZapKindReceiver),
 		zap.String(components.ZapNameKey, id.String()),
 		zap.String(components.ZapKindPipeline, string(dt)))
+}
+
+func getReceiverStabilityLevel(factory component.ReceiverFactory, dt config.DataType) component.StabilityLevel {
+	switch dt {
+	case config.TracesDataType:
+		return factory.TracesReceiverStability()
+	case config.MetricsDataType:
+		return factory.MetricsReceiverStability()
+	case config.LogsDataType:
+		return factory.LogsReceiverStability()
+	}
+	return component.StabilityLevelUndefined
 }
 
 func (bps *Pipelines) getPipelinesSummaryTableData() zpages.SummaryPipelinesTableData {

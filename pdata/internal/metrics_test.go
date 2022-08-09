@@ -691,15 +691,23 @@ func TestMetricsClone(t *testing.T) {
 func TestMetricsDataPointFlags(t *testing.T) {
 	gauge := generateTestGauge()
 
-	gauge.DataPoints().At(0).SetFlags(NewMetricDataPointFlags())
-	assert.True(t, gauge.DataPoints().At(0).Flags() == MetricDataPointFlagsNone)
-	assert.False(t, gauge.DataPoints().At(0).Flags().HasFlag(MetricDataPointFlagNoRecordedValue))
+	assert.False(t, gauge.DataPoints().At(0).Flags().NoRecordedValue())
 	assert.Equal(t, "FLAG_NONE", gauge.DataPoints().At(0).Flags().String())
 
-	gauge.DataPoints().At(0).SetFlags(NewMetricDataPointFlags(MetricDataPointFlagNoRecordedValue))
-	assert.False(t, gauge.DataPoints().At(0).Flags() == MetricDataPointFlagsNone)
-	assert.True(t, gauge.DataPoints().At(0).Flags().HasFlag(MetricDataPointFlagNoRecordedValue))
-	assert.Equal(t, "FLAG_NO_RECORDED_VALUE", gauge.DataPoints().At(0).Flags().String())
+	gauge.DataPoints().At(1).Flags().SetNoRecordedValue(true)
+	assert.True(t, gauge.DataPoints().At(1).Flags().NoRecordedValue())
+	assert.Equal(t, "FLAG_NO_RECORDED_VALUE", gauge.DataPoints().At(1).Flags().String())
+	gauge.DataPoints().At(1).Flags().SetNoRecordedValue(false)
+	assert.False(t, gauge.DataPoints().At(1).Flags().NoRecordedValue())
+
+	gauge.DataPoints().At(1).Flags().SetNoRecordedValue(true)
+	gauge.DataPoints().At(1).Flags().SetNoRecordedValue(true)
+	assert.True(t, gauge.DataPoints().At(1).Flags().NoRecordedValue())
+
+	gauge.DataPoints().At(0).Flags().SetNoRecordedValue(true)
+	gauge.DataPoints().At(0).Flags().MoveTo(gauge.DataPoints().At(1).Flags())
+	assert.False(t, gauge.DataPoints().At(0).Flags().NoRecordedValue())
+	assert.True(t, gauge.DataPoints().At(1).Flags().NoRecordedValue())
 }
 
 func BenchmarkMetricsClone(b *testing.B) {
@@ -1006,4 +1014,14 @@ func generateMetricsEmptyDataPoints() Metrics {
 			},
 		},
 	}}
+}
+
+func fillTestMetricDataPointFlags(tv MetricDataPointFlags) {
+	*tv.orig = uint32(otlpmetrics.DataPointFlags_FLAG_NONE)
+}
+
+func generateTestMetricDataPointFlags() MetricDataPointFlags {
+	tv := NewMetricDataPointFlags()
+	fillTestMetricDataPointFlags(tv)
+	return tv
 }

@@ -71,10 +71,27 @@ func (ms InstrumentationScope) SetVersion(v string) {
 	(*ms.orig).Version = v
 }
 
+// Attributes returns the Attributes associated with this InstrumentationScope.
+func (ms InstrumentationScope) Attributes() Map {
+	return newMap(&(*ms.orig).Attributes)
+}
+
+// DroppedAttributesCount returns the droppedattributescount associated with this InstrumentationScope.
+func (ms InstrumentationScope) DroppedAttributesCount() uint32 {
+	return (*ms.orig).DroppedAttributesCount
+}
+
+// SetDroppedAttributesCount replaces the droppedattributescount associated with this InstrumentationScope.
+func (ms InstrumentationScope) SetDroppedAttributesCount(v uint32) {
+	(*ms.orig).DroppedAttributesCount = v
+}
+
 // CopyTo copies all properties from the current struct to the dest.
 func (ms InstrumentationScope) CopyTo(dest InstrumentationScope) {
 	dest.SetName(ms.Name())
 	dest.SetVersion(ms.Version())
+	ms.Attributes().CopyTo(dest.Attributes())
+	dest.SetDroppedAttributesCount(ms.DroppedAttributesCount())
 }
 
 // Slice logically represents a slice of Value.
@@ -111,10 +128,11 @@ func (es Slice) Len() int {
 // At returns the element at the given index.
 //
 // This function is used mostly for iterating over all the values in the slice:
-//   for i := 0; i < es.Len(); i++ {
-//       e := es.At(i)
-//       ... // Do something with the element
-//   }
+//
+//	for i := 0; i < es.Len(); i++ {
+//	    e := es.At(i)
+//	    ... // Do something with the element
+//	}
 func (es Slice) At(ix int) Value {
 	return newValue(&(*es.orig)[ix])
 }
@@ -139,12 +157,13 @@ func (es Slice) CopyTo(dest Slice) {
 // 2. If the newCap > cap then the slice capacity will be expanded to equal newCap.
 //
 // Here is how a new Slice can be initialized:
-//   es := NewSlice()
-//   es.EnsureCapacity(4)
-//   for i := 0; i < 4; i++ {
-//       e := es.AppendEmpty()
-//       // Here should set all the values for e.
-//   }
+//
+//	es := NewSlice()
+//	es.EnsureCapacity(4)
+//	for i := 0; i < 4; i++ {
+//	    e := es.AppendEmpty()
+//	    // Here should set all the values for e.
+//	}
 func (es Slice) EnsureCapacity(newCap int) {
 	oldCap := cap(*es.orig)
 	if newCap <= oldCap {

@@ -183,44 +183,85 @@ func (at MetricAggregationTemporality) String() string {
 	return otlpmetrics.AggregationTemporality(at).String()
 }
 
-// MetricDataPointFlags defines how a metric aggregator reports aggregated values.
-// It describes how those values relate to the time interval over which they are aggregated.
-type MetricDataPointFlags uint32
-
-const (
-	// MetricDataPointFlagsNone is the default MetricDataPointFlags.
-	MetricDataPointFlagsNone = MetricDataPointFlags(otlpmetrics.DataPointFlags_FLAG_NONE)
-)
-
-// NewMetricDataPointFlags returns a new MetricDataPointFlags combining the flags passed
-// in as parameters.
-func NewMetricDataPointFlags(flags ...MetricDataPointFlag) MetricDataPointFlags {
-	var flag MetricDataPointFlags
-	for _, f := range flags {
-		flag |= MetricDataPointFlags(f)
-	}
-	return flag
+// FlagsStruct returns the flagsstruct associated with this NumberDataPoint.
+// Deprecated [0.58.0] Use Flags() instead
+func (ms NumberDataPoint) FlagsStruct() MetricDataPointFlags {
+	return ms.Flags()
 }
 
-// HasFlag returns true if the MetricDataPointFlags contains the specified flag
-func (d MetricDataPointFlags) HasFlag(flag MetricDataPointFlag) bool {
-	return d&MetricDataPointFlags(flag) != 0
+// FlagsStruct returns the flagsstruct associated with this HistogramDataPoint.
+// Deprecated [0.58.0] Use Flags() instead
+func (ms HistogramDataPoint) FlagsStruct() MetricDataPointFlags {
+	return ms.Flags()
+}
+
+// FlagsStruct returns the flagsstruct associated with this ExponentialHistogramDataPoint.
+// Deprecated [0.58.0] Use Flags() instead
+func (ms ExponentialHistogramDataPoint) FlagsStruct() MetricDataPointFlags {
+	return ms.Flags()
+}
+
+// FlagsStruct returns the flagsstruct associated with this SummaryDataPoint.
+// Deprecated [0.58.0] Use Flags() instead
+func (ms SummaryDataPoint) FlagsStruct() MetricDataPointFlags {
+	return ms.Flags()
+}
+
+// MetricDataPointFlags defines how a metric aggregator reports aggregated values.
+// It describes how those values relate to the time interval over which they are aggregated.
+//
+// This is a reference type, if passed by value and callee modifies it the
+// caller will see the modification.
+//
+// Must use NewMetricDataPointFlagsStruct function to create new instances.
+// Important: zero-initialized instance is not valid for use.
+type MetricDataPointFlags struct {
+	orig *uint32
+}
+
+func newMetricDataPointFlags(orig *uint32) MetricDataPointFlags {
+	return MetricDataPointFlags{orig: orig}
+}
+
+// NewMetricDataPointFlags creates a new empty MetricDataPointFlags.
+//
+// This must be used only in testing code. Users should use "AppendEmpty" when part of a Slice,
+// OR directly access the member if this is embedded in another struct.
+func NewMetricDataPointFlags() MetricDataPointFlags {
+	return newMetricDataPointFlags(new(uint32))
+}
+
+// MoveTo moves all properties from the current struct to dest
+// resetting the current instance to its zero value
+func (ms MetricDataPointFlags) MoveTo(dest MetricDataPointFlags) {
+	*dest.orig = *ms.orig
+	*ms.orig = uint32(otlpmetrics.DataPointFlags_FLAG_NONE)
+}
+
+// CopyTo copies all properties from the current struct to the dest.
+func (ms MetricDataPointFlags) CopyTo(dest MetricDataPointFlags) {
+	*dest.orig = *ms.orig
+}
+
+// NoRecordedValue returns true if the MetricDataPointFlags contains the NO_RECORDED_VALUE flag.
+func (ms MetricDataPointFlags) NoRecordedValue() bool {
+	return *ms.orig&uint32(otlpmetrics.DataPointFlags_FLAG_NO_RECORDED_VALUE) != 0
+}
+
+// SetNoRecordedValue sets the FLAG_NO_RECORDED_VALUE flag if true and removes it if false.
+// Setting this Flag when it is already set will change nothing.
+func (ms MetricDataPointFlags) SetNoRecordedValue(b bool) {
+	if b {
+		*ms.orig |= uint32(otlpmetrics.DataPointFlags_FLAG_NO_RECORDED_VALUE)
+	} else {
+		*ms.orig &^= uint32(otlpmetrics.DataPointFlags_FLAG_NO_RECORDED_VALUE)
+	}
 }
 
 // String returns the string representation of the MetricDataPointFlags.
-func (d MetricDataPointFlags) String() string {
-	return otlpmetrics.DataPointFlags(d).String()
+func (ms MetricDataPointFlags) String() string {
+	return otlpmetrics.DataPointFlags(*ms.orig).String()
 }
-
-// MetricDataPointFlag allow users to configure DataPointFlags. This is achieved via NewMetricDataPointFlags.
-// The separation between MetricDataPointFlags and MetricDataPointFlag exists to prevent users accidentally
-// comparing the value of individual flags with MetricDataPointFlags. Instead, users must use the HasFlag method.
-type MetricDataPointFlag uint32
-
-const (
-	// MetricDataPointFlagNoRecordedValue is flag for a metric aggregator which reports changes since last report time.
-	MetricDataPointFlagNoRecordedValue = MetricDataPointFlag(otlpmetrics.DataPointFlags_FLAG_NO_RECORDED_VALUE)
-)
 
 // NumberDataPointValueType specifies the type of NumberDataPoint value.
 type NumberDataPointValueType int32
@@ -283,40 +324,4 @@ func (ot OptionalType) String() string {
 		return "Double"
 	}
 	return ""
-}
-
-// MBucketCounts returns the bucketcounts associated with this HistogramDataPoint.
-// Deprecated: [0.54.0] Use BucketCounts instead.
-func (ms HistogramDataPoint) MBucketCounts() []uint64 {
-	return ms.orig.BucketCounts
-}
-
-// SetMBucketCounts replaces the bucketcounts associated with this HistogramDataPoint.
-// Deprecated: [0.54.0] Use SetBucketCounts instead.
-func (ms HistogramDataPoint) SetMBucketCounts(v []uint64) {
-	ms.orig.BucketCounts = v
-}
-
-// MExplicitBounds returns the explicitbounds associated with this HistogramDataPoint.
-// Deprecated: [0.54.0] Use ExplicitBounds instead.
-func (ms HistogramDataPoint) MExplicitBounds() []float64 {
-	return ms.orig.ExplicitBounds
-}
-
-// SetMExplicitBounds replaces the explicitbounds associated with this HistogramDataPoint.
-// Deprecated: [0.54.0] Use SetExplicitBounds instead.
-func (ms HistogramDataPoint) SetMExplicitBounds(v []float64) {
-	ms.orig.ExplicitBounds = v
-}
-
-// MBucketCounts returns the bucketcounts associated with this Buckets.
-// Deprecated: [0.54.0] Use BucketCounts instead.
-func (ms Buckets) MBucketCounts() []uint64 {
-	return ms.orig.BucketCounts
-}
-
-// SetMBucketCounts replaces the bucketcounts associated with this Buckets.
-// Deprecated: [0.54.0] Use SetBucketCounts instead.
-func (ms Buckets) SetMBucketCounts(v []uint64) {
-	ms.orig.BucketCounts = v
 }

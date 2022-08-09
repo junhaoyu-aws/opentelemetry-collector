@@ -295,9 +295,9 @@ func testCollectorStartHelper(t *testing.T, telemetry *telemetryInitializer, tc 
 	}
 
 	cfgSet := newDefaultConfigProviderSettings([]string{filepath.Join("testdata", "otelcol-nop.yaml")})
-	cfgSet.MapConverters = append([]confmap.Converter{
+	cfgSet.ResolverSettings.Converters = append([]confmap.Converter{
 		mapConverter{extraCfgAsProps}},
-		cfgSet.MapConverters...,
+		cfgSet.ResolverSettings.Converters...,
 	)
 	cfgProvider, err := NewConfigProvider(cfgSet)
 	require.NoError(t, err)
@@ -339,9 +339,7 @@ func TestCollectorStartWithOpenTelemetryMetrics(t *testing.T) {
 	for _, tc := range ownMetricsTestCases("test version") {
 		t.Run(tc.name, func(t *testing.T) {
 			colTel := newColTelemetry(featuregate.NewRegistry())
-			colTel.registry.Apply(map[string]bool{
-				useOtelForInternalMetricsfeatureGateID: true,
-			})
+			require.NoError(t, colTel.registry.Apply(map[string]bool{useOtelForInternalMetricsfeatureGateID: true}))
 			testCollectorStartHelper(t, colTel, tc)
 		})
 	}
