@@ -41,7 +41,8 @@ type provider struct {
 // New returns a new confmap.Provider that reads the configuration from a file.
 //
 // This Provider supports "http" scheme, and can be called with a "uri" that follows:
-//   http-uri : http://host/xxx
+//
+//     http-uri : http://host/xxx
 //
 // One example for http-uri be like: http://localhost:3333/getConfig
 //
