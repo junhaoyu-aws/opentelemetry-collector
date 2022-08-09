@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package httpprovider
+package httpprovider // import "go.opentelemetry.io/collector/confmap/provider/httpprovider"
 
 import (
 	"context"
