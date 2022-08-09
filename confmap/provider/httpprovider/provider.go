@@ -42,8 +42,6 @@ type provider struct {
 //
 // This Provider supports "http" scheme, and can be called with a "uri" that follows:
 //
-//     http-uri : http://host/xxx
-//
 // One example for http-uri be like: http://localhost:3333/getConfig
 //
 // Examples:
