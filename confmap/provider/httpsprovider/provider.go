@@ -37,7 +37,7 @@ type httpsClient interface {
 }
 
 type provider struct {
-	client httpsClient
+	client http.Client
 }
 
 // New returns a new confmap.Provider that reads the configuration from a file.
@@ -68,7 +68,7 @@ func New() confmap.Provider {
 	}
 
 	// return
-	return &provider{client: &http.Client{
+	return &provider{client: http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: false,
@@ -78,22 +78,22 @@ func New() confmap.Provider {
 	}}
 }
 
-func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFunc) (confmap.Retrieved, error) {
+func (fmp *provider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFunc) (*confmap.Retrieved, error) {
 	if !strings.HasPrefix(uri, schemeName+"://") {
-		return confmap.Retrieved{}, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
+		return nil, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
 	// GET request
 	r, err := fmp.client.Get(uri)
 	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("unable to download the file via HTTPS GET for uri %q, with err: %w", uri, err)
+		return nil, fmt.Errorf("unable to download the file via HTTPS GET for uri %q, with err: %w", uri, err)
 	}
 	defer r.Body.Close()
 
 	// read the response body
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return confmap.Retrieved{}, fmt.Errorf("fail to read the response body from uri %q, with err: %w", uri, err)
+		return nil, fmt.Errorf("fail to read the response body from uri %q, with err: %w", uri, err)
 	}
 
 	return internal.NewRetrievedFromYAML(body)
