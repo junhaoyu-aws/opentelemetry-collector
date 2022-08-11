@@ -128,8 +128,10 @@ func (col *Collector) Shutdown() {
 func (col *Collector) runAndWaitForShutdownEvent(ctx context.Context) error {
 	col.service.telemetrySettings.Logger.Info("Everything is ready. Begin running and processing data.")
 	// Create a HTTP server to receive signals for hot-reload
-
 	http.HandleFunc("/configHotReload", func(w http.ResponseWriter, r *http.Request) {
+		// check if the S3 URI from the HTTP signal is a config URI being used for current OTEL Collector
+
+		// if yes, start doing hot reload
 		col.service.telemetrySettings.Logger.Info("Config hot reload...")
 		col.service.Shutdown(ctx)
 		// reload the configurations
