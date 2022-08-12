@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -130,12 +131,27 @@ func (col *Collector) runAndWaitForShutdownEvent(ctx context.Context) error {
 	// Create a HTTP server to receive signals for hot-reload
 	http.HandleFunc("/configHotReload", func(w http.ResponseWriter, r *http.Request) {
 		// check if the S3 URI from the HTTP signal is a config URI being used for current OTEL Collector
-
+		changedURI, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			fmt.Println("Failed to load the http request body : %w", err)
+			return
+		}
+		configURIs := ctx.Value("configURIs").([]string)
+		isUsingURI := false
+		for _, configURI := range configURIs {
+			if configURI == string(changedURI) {
+				isUsingURI = true
+				break
+			}
+		}
+		if !isUsingURI {
+			return
+		}
 		// if yes, start doing hot reload
 		col.service.telemetrySettings.Logger.Info("Config hot reload...")
 		col.service.Shutdown(ctx)
 		// reload the configurations
-		newCfgSet := newDefaultConfigProviderSettings(ctx.Value("configURIs").([]string))
+		newCfgSet := newDefaultConfigProviderSettings(configURIs)
 		col.set.ConfigProvider, _ = NewConfigProvider(newCfgSet)
 		// restart the components
 		col.service.Start(ctx)

@@ -16,7 +16,6 @@ package service // import "go.opentelemetry.io/collector/service"
 
 import (
 	"context"
-	"log"
 
 	"github.com/spf13/cobra"
 
@@ -38,9 +37,8 @@ func NewCommand(set CollectorSettings) *cobra.Command {
 			if set.ConfigProvider == nil {
 				var err error
 				configURIs := getConfigFlag(flagSet)
-				log.Println(configURIs)
 				cfgSet := newDefaultConfigProviderSettings(configURIs)
-				//
+				// Pass the config URIs to sub-goroutines
 				newCtx = context.WithValue(cmd.Context(), "configURIs", configURIs)
 				// Append the "overwrite properties converter" as the first converter.
 				cfgSet.MapConverters = append(
